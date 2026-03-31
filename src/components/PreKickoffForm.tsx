@@ -601,10 +601,15 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
           {data.area_responsibles.length > 0 && (
             <div className="area-resps-container">
               <label className="sub-label">Responsáveis por Setor</label>
+              <div className="resps-header" style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr', gap: '12px', padding: '0 10px', marginBottom: '8px', opacity: 0.6 }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Setor</span>
+                <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Responsável</span>
+                <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Contato</span>
+              </div>
               {data.area_responsibles.map((resp, i) => (
                 <div key={resp.area} className="area-resp-row">
-                  <div className="area-badge" style={{ minWidth: '130px' }}>{resp.area}</div>
-                  <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                  <div className="area-badge">{resp.area}</div>
+                  <div className="field">
                     <input 
                       type="text" 
                       placeholder="Gerente/Responsável" 
@@ -612,7 +617,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
                       onChange={(e) => handleAreaRespChange(i, 'manager', e.target.value)} 
                     />
                   </div>
-                  <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                  <div className="field">
                     <input 
                       type="text" 
                       placeholder="Contato (Tel/E-mail)" 
@@ -734,34 +739,37 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
           {data.integracoes_detalhes.length > 0 && (
             <div className="integ-details-container">
               <label className="sub-label">Responsáveis Técnicos da Integração</label>
+              <div className="resps-header" style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr', gap: '12px', padding: '0 10px', marginBottom: '8px', opacity: 0.6 }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Integração</span>
+                <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Técnico</span>
+                <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Contato</span>
+              </div>
               {data.integracoes_detalhes.map((det, i) => (
                 <div key={det.key} className="integ-detail-row">
-                  <div className="integ-badge" style={{ minWidth: '130px' }}>{det.key}</div>
-                  <div style={{ display: 'flex', flex: 1, gap: '10px' }}>
-                    <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-                      <input 
-                        type="text" 
-                        placeholder="Técnico Responsável" 
-                        value={det.tech} 
-                        onChange={(e) => {
-                          const newList = [...data.integracoes_detalhes];
-                          newList[i].tech = e.target.value;
-                          setData({ ...data, integracoes_detalhes: newList });
-                        }} 
-                      />
-                    </div>
-                    <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-                      <input 
-                        type="text" 
-                        placeholder="Contato (Tel/E-mail)" 
-                        value={det.contact} 
-                        onChange={(e) => {
-                          const newList = [...data.integracoes_detalhes];
-                          newList[i].contact = e.target.value;
-                          setData({ ...data, integracoes_detalhes: newList });
-                        }} 
-                      />
-                    </div>
+                  <div className="integ-badge">{det.key}</div>
+                  <div className="field">
+                    <input 
+                      type="text" 
+                      placeholder="Técnico Responsável" 
+                      value={det.tech} 
+                      onChange={(e) => {
+                        const newList = [...data.integracoes_detalhes];
+                        newList[i].tech = e.target.value;
+                        setData({ ...data, integracoes_detalhes: newList });
+                      }} 
+                    />
+                  </div>
+                  <div className="field">
+                    <input 
+                      type="text" 
+                      placeholder="Contato (Tel/E-mail)" 
+                      value={det.contact} 
+                      onChange={(e) => {
+                        const newList = [...data.integracoes_detalhes];
+                        newList[i].contact = e.target.value;
+                        setData({ ...data, integracoes_detalhes: newList });
+                      }} 
+                    />
                   </div>
                 </div>
               ))}

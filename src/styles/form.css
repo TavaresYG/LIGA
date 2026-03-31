@@ -114,10 +114,15 @@
 }
 
 /* Dynamic Field Styles */
-.area-resps-container { margin-top: 15px; background: var(--bg-page); padding: 15px; border-radius: 10px; border: 1px solid var(--border-color); }
-.sub-label { display: block; font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 12px; }
-.area-resp-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
-.area-badge { background: var(--accent); color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; min-width: 120px; text-align: center; }
+.sub-label { 
+  display: block; 
+  font-size: 11px; 
+  font-weight: 700; 
+  color: var(--accent); 
+  text-transform: uppercase; 
+  margin-bottom: 12px; 
+}
+/* Substituted by shared .integ-detail-row and .area-resp-row logic below */
 
 .analyzer-list, .printer-list { display: grid; gap: 8px; margin-top: 10px; }
 .analyzer-row, .printer-row { display: flex; gap: 10px; align-items: center; background: var(--bg-page); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); }
@@ -147,9 +152,46 @@
 .day-name { font-weight: 700; color: var(--accent); min-width: 80px; }
 .day-row input[type=time] { padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; }
 
-.integ-details-container { margin-top: 15px; padding: 15px; background: #fff; border: 1px solid var(--border-color); border-radius: 10px; }
-.integ-detail-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; padding: 10px; background: var(--bg-page); border-radius: 8px; }
-.integ-badge { background: var(--accent-light); color: var(--accent); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; min-width: 130px; text-align: center; }
+.integ-details-container, .area-resps-container { 
+  margin-top: 15px; 
+  padding: 15px; 
+  background: var(--bg-page); 
+  border: 1px solid var(--border-color); 
+  border-radius: 12px; 
+}
+
+.integ-detail-row, .area-resp-row { 
+  display: grid; 
+  grid-template-columns: 140px 1fr 1fr; 
+  gap: 12px; 
+  align-items: center; 
+  margin-bottom: 10px; 
+  padding: 10px; 
+  background: var(--bg-card); 
+  border-radius: 8px; 
+  border: 1px solid rgba(0,0,0,0.03);
+}
+
+@media(max-width: 600px) {
+  .integ-detail-row, .area-resp-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.integ-badge, .area-badge { 
+  background: var(--accent-light); 
+  color: var(--accent); 
+  padding: 6px 12px; 
+  border-radius: 6px; 
+  font-size: 11px; 
+  font-weight: 700; 
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .disponibilidade-box { background: #fdfdfd; padding: 18px; border-radius: 12px; border: 1px dashed var(--border-color); }
 .semanal-config { margin-top: 15px; }
