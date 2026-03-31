@@ -129,15 +129,16 @@ const ScheduleSelector: React.FC<{
       </div>
 
       {days.length > 0 && (
-        <div className="day-grid">
-          <label className="sub-label" style={{ fontSize: '11px', color: '#64748b' }}>Ajuste de horário específico por dia (opcional):</label>
+        <div className="day-grid" style={{ background: 'var(--bg-page)', borderRadius: '10px', padding: '12px', marginTop: '6px', border: '1px dashed var(--border-color)' }}>
+          <p style={{ fontSize: '11px', color: '#64748b', margin: '0 0 10px 0', fontStyle: 'italic' }}>✏️ Ajuste de horário específico por dia (opcional). Os campos já estão preenchidos com o horário padrão definido acima.</p>
           {days.map(d => (
-            <div key={d.day} className="day-row">
-              <span className="day-name" style={{ minWidth: '110px' }}>{d.day}</span>
+            <div key={d.day} className="day-row" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+              <span className="day-name" style={{ minWidth: '110px', fontWeight: 700, color: 'var(--accent)', fontSize: '13px' }}>{d.day}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input type="time" value={d.start} onChange={e => updateTime(d.day, 'start', e.target.value)} />
-                <span style={{ fontSize: '12px', color: '#64748b' }}>até</span>
-                <input type="time" value={d.end} onChange={e => updateTime(d.day, 'end', e.target.value)} />
+                <span style={{ fontSize: '11px', color: '#64748b' }}>De</span>
+                <input type="time" value={d.start} onChange={e => updateTime(d.day, 'start', e.target.value)} style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '13px' }} />
+                <span style={{ fontSize: '11px', color: '#64748b' }}>até</span>
+                <input type="time" value={d.end} onChange={e => updateTime(d.day, 'end', e.target.value)} style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '13px' }} />
               </div>
             </div>
           ))}
@@ -727,29 +728,31 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
               {data.integracoes_detalhes.map((det, i) => (
                 <div key={det.key} className="integ-detail-row">
                   <div className="integ-badge" style={{ minWidth: '130px' }}>{det.key}</div>
-                  <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-                    <input 
-                      type="text" 
-                      placeholder="Técnico Responsável" 
-                      value={det.tech} 
-                      onChange={(e) => {
-                        const newList = [...data.integracoes_detalhes];
-                        newList[i].tech = e.target.value;
-                        setData({ ...data, integracoes_detalhes: newList });
-                      }} 
-                    />
-                  </div>
-                  <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-                    <input 
-                      type="text" 
-                      placeholder="Contato (Tel/E-mail)" 
-                      value={det.contact} 
-                      onChange={(e) => {
-                        const newList = [...data.integracoes_detalhes];
-                        newList[i].contact = e.target.value;
-                        setData({ ...data, integracoes_detalhes: newList });
-                      }} 
-                    />
+                  <div style={{ display: 'flex', flex: 1, gap: '10px' }}>
+                    <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                      <input 
+                        type="text" 
+                        placeholder="Técnico Responsável" 
+                        value={det.tech} 
+                        onChange={(e) => {
+                          const newList = [...data.integracoes_detalhes];
+                          newList[i].tech = e.target.value;
+                          setData({ ...data, integracoes_detalhes: newList });
+                        }} 
+                      />
+                    </div>
+                    <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                      <input 
+                        type="text" 
+                        placeholder="Contato (Tel/E-mail)" 
+                        value={det.contact} 
+                        onChange={(e) => {
+                          const newList = [...data.integracoes_detalhes];
+                          newList[i].contact = e.target.value;
+                          setData({ ...data, integracoes_detalhes: newList });
+                        }} 
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
