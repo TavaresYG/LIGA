@@ -265,13 +265,13 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
           <div className="doc-header">
             <div className="doc-title">
               <h1>📋 Documento de Pré Kick-Off</h1>
-              <p>Sistema LIGA &nbsp;|&nbsp; Implantação Laboratorial</p>
+              <p>Implantação de Sistema Laboratorial</p>
             </div>
             <div className="doc-meta">
-              <strong style={{ fontSize: '15px' }}>{data.nome || '(cliente não informado)'}</strong><br />
+              <strong>{data.nome || '(cliente não informado)'}</strong><br />
               <span>Implantador: <strong>{data.implantador || 'Não informado'}</strong></span><br />
               Data do Pré Kick-Off: {fmtDate(data.data) || hoje}<br />
-              Documento gerado em: {hoje}
+              Gerado em: {hoje}
             </div>
           </div>
 
@@ -284,7 +284,6 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
               {renderCell('E-mail', data.email)}
               {renderCell('Telefone', data.tel)}
               {renderCell('Data do Pré Kick-Off', fmtDate(data.data))}
-              {renderCell('Implantador', data.implantador, true)}
             </div>
           </div>
 
