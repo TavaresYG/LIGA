@@ -503,16 +503,18 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
           </div>
 
           <div className="doc-footer">
-            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '20px' }}>Documento gerado em {hoje} &nbsp;|&nbsp; Uso interno — Implantação de Sistema Laboratorial</div>
             <div className="sig-row">
               <div className="sig-box">
                 <div className="sig-line"></div>
-                Implantador Responsável<br /><small>{data.implantador || '___________________'}</small>
+                Implantador Respons&aacute;vel<br /><small>{data.implantador || '___________________'}</small>
               </div>
               <div className="sig-box">
                 <div className="sig-line"></div>
-                Coordenador de Implantação<br /><small>Yuri Tavares Gonçalves</small>
+                Coordenador de Implanta&ccedil;&atilde;o<br /><small>Yuri Tavares Gon&ccedil;alves</small>
               </div>
+            </div>
+            <div className="doc-footer-note">
+              Documento gerado em {hoje} &nbsp;|&nbsp; Uso interno &mdash; Implanta&ccedil;&atilde;o de Sistema Laboratorial
             </div>
           </div>
         </div>
