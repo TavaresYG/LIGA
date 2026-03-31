@@ -81,14 +81,24 @@
 .badge-media { background: #fef3c7; color: #92400e; }
 .badge-baixa { background: #d1fae5; color: #065f46; }
 
-.doc-footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #94a3b8; }
-.sig-box { border-top: 1px solid #374151; width: 200px; text-align: center; padding-top: 4px; font-size: 11px; color: #374151; }
+.doc-footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid #e2e8f0; }
+.sig-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 10px; }
+.sig-box { text-align: center; font-size: 11px; color: #374151; width: 220px; }
+.sig-line { border-top: 1px solid #374151; width: 100%; margin-bottom: 4px; }
 
 @media print {
   body { background: #fff !important; }
   .pdf-screen { padding: 0 !important; max-width: 100% !important; }
   .pdf-toolbar { display: none !important; }
-  .doc { box-shadow: none !important; padding: 20px 24px !important; border-radius: 0 !important; }
+  .doc { box-shadow: none !important; padding: 16px 24px !important; border-radius: 0 !important; }
+  .doc-header { page-break-inside: avoid; break-inside: avoid; }
+  .doc-section { break-inside: avoid; page-break-inside: avoid; }
+  .doc-section h2 { break-after: avoid; page-break-after: avoid; }
+  .doc-grid { break-inside: avoid; page-break-inside: avoid; }
+  .doc-cell { break-inside: avoid; page-break-inside: avoid; }
+  .doc-footer { break-inside: avoid; page-break-inside: avoid; margin-top: 30px; }
+  .risk-table { break-inside: avoid; page-break-inside: avoid; }
+  .mini-table { break-inside: avoid; page-break-inside: avoid; }
 }
 
 /* Dynamic Field Styles */

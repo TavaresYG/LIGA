@@ -265,12 +265,13 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
           <div className="doc-header">
             <div className="doc-title">
               <h1>📋 Documento de Pré Kick-Off</h1>
-              <p>{data.nome || '(cliente não informado)'} &nbsp;|&nbsp; Implantação de Sistema Laboratorial</p>
+              <p>Sistema LIGA &nbsp;|&nbsp; Implantação Laboratorial</p>
             </div>
             <div className="doc-meta">
-              <strong>{data.nome || '(cliente não informado)'}</strong>
+              <strong style={{ fontSize: '15px' }}>{data.nome || '(cliente não informado)'}</strong><br />
+              <span>Implantador: <strong>{data.implantador || 'Não informado'}</strong></span><br />
               Data do Pré Kick-Off: {fmtDate(data.data) || hoje}<br />
-              Gerado em: {hoje}
+              Documento gerado em: {hoje}
             </div>
           </div>
 
@@ -502,9 +503,16 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
           </div>
 
           <div className="doc-footer">
-            <div>Documento gerado em {hoje} &nbsp;|&nbsp; Uso interno — Implantação de Sistema Laboratorial</div>
-            <div className="sig-box">
-              Implantador Responsável<br /><small>{data.implantador || '___________________'}</small>
+            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '20px' }}>Documento gerado em {hoje} &nbsp;|&nbsp; Uso interno — Implantação de Sistema Laboratorial</div>
+            <div className="sig-row">
+              <div className="sig-box">
+                <div className="sig-line"></div>
+                Implantador Responsável<br /><small>{data.implantador || '___________________'}</small>
+              </div>
+              <div className="sig-box">
+                <div className="sig-line"></div>
+                Coordenador de Implantação<br /><small>Yuri Tavares Gonçalves</small>
+              </div>
             </div>
           </div>
         </div>
