@@ -3,6 +3,23 @@ export interface Risk {
   nivel: string;
 }
 
+export interface AreaResponsible {
+  area: string;
+  manager: string;
+  contact: string;
+}
+
+export interface Analyzer {
+  name: string;
+  unit: string;
+}
+
+export interface PrinterInfo {
+  count: number;
+  brand: 'Elgin' | 'Zebra' | 'Argox' | '';
+  model: string;
+}
+
 export interface FormData {
   nome: string;
   responsavel: string;
@@ -15,6 +32,7 @@ export interface FormData {
   unidades: string;
   volume: string;
   areas: string[];
+  area_responsibles: AreaResponsible[];
   obs_contexto: string;
   processo_atual: string;
   gargalos: string;
@@ -23,8 +41,18 @@ export interface FormData {
   fase2: string;
   custom: string;
   equipamentos: string;
+  analyzers: Analyzer[];
   integracoes: string[];
   resp_ti: string;
+  infra_servidor: string; // 'Sim' | 'Não'
+  infra_acesso: string;
+  infra_specs: string;
+  printers: PrinterInfo[];
+  cron_config: string;
+  cron_test_interf: string;
+  cron_treino: string;
+  cron_test_integ: string;
+  disponibilidade_horas: string;
   migracao: string[];
   qualidade_base: string;
   prazo_base: string;

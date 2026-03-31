@@ -21,6 +21,7 @@ const defaultData: FormData = {
   unidades: '',
   volume: '',
   areas: [],
+  area_responsibles: [],
   obs_contexto: '',
   processo_atual: '',
   gargalos: '',
@@ -29,8 +30,18 @@ const defaultData: FormData = {
   fase2: '',
   custom: '',
   equipamentos: '',
+  analyzers: [],
   integracoes: [],
   resp_ti: '',
+  infra_servidor: 'Não',
+  infra_acesso: '',
+  infra_specs: '',
+  printers: [],
+  cron_config: '',
+  cron_test_interf: '',
+  cron_treino: '',
+  cron_test_integ: '',
+  disponibilidade_horas: '',
   migracao: [],
   qualidade_base: '',
   prazo_base: '',
@@ -64,10 +75,44 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
 
   const handleCheckbox = (name: keyof FormData, value: string) => {
     const current = data[name] as string[];
-    const updated = current.includes(value)
-      ? current.filter((v) => v !== value)
-      : [...current, value];
-    setData({ ...data, [name]: updated });
+    const isAdding = !current.includes(value);
+    const updated = isAdding
+      ? [...current, value]
+      : current.filter((v) => v !== value);
+    
+    // Auto-manage area_responsibles
+    let newResponsibles = [...data.area_responsibles];
+    if (name === 'areas') {
+      if (isAdding) {
+        newResponsibles.push({ area: value, manager: '', contact: '' });
+      } else {
+        newResponsibles = newResponsibles.filter(r => r.area !== value);
+      }
+    }
+
+    setData({ ...data, [name]: updated, area_responsibles: newResponsibles });
+  };
+
+  const handleAreaRespChange = (index: number, field: 'manager' | 'contact', value: string) => {
+    const resps = [...data.area_responsibles];
+    resps[index] = { ...resps[index], [field]: value };
+    setData({ ...data, area_responsibles: resps });
+  };
+
+  const addAnalyzer = () => {
+    setData({ ...data, analyzers: [...data.analyzers, { name: '', unit: '' }] });
+  };
+
+  const removeAnalyzer = (index: number) => {
+    setData({ ...data, analyzers: data.analyzers.filter((_, i) => i !== index) });
+  };
+
+  const addPrinter = () => {
+    setData({ ...data, printers: [...data.printers, { count: 1, brand: '', model: '' }] });
+  };
+
+  const removePrinter = (index: number) => {
+    setData({ ...data, printers: data.printers.filter((_, i) => i !== index) });
   };
 
   const addRisco = () => {
@@ -137,6 +182,20 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
               {renderCell('Nº de Unidades', data.unidades)}
               {renderCell('Volume Médio/Dia', data.volume)}
               {renderCell('Áreas Envolvidas', data.areas)}
+              {data.area_responsibles.length > 0 && (
+                <div className="doc-grid full no-border">
+                  <table className="mini-table">
+                    <thead>
+                      <tr><th>Área</th><th>Responsável</th><th>Contato</th></tr>
+                    </thead>
+                    <tbody>
+                      {data.area_responsibles.map((r, i) => (
+                        <tr key={i}><td>{r.area}</td><td>{r.manager}</td><td>{r.contact}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               {renderCell('Observações', data.obs_contexto, true)}
             </div>
           </div>
@@ -161,10 +220,60 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
 
           <div className="doc-section">
             <h2>🔌 Integrações e Equipamentos</h2>
-            <div className="doc-grid full">
-              {renderCell('Equipamentos para Interfaceamento', data.equipamentos, true)}
-              {renderCell('Integrações com Sistemas Externos', data.integracoes, true)}
+            <div className="doc-grid full no-border">
+              {data.analyzers.length > 0 ? (
+                <table className="mini-table">
+                  <thead>
+                    <tr><th>Equipamento (Analisador)</th><th>Unidade / Local</th></tr>
+                  </thead>
+                  <tbody>
+                    {data.analyzers.map((ana, i) => (
+                      <tr key={i}><td>{ana.name}</td><td>{ana.unit}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                renderCell('Equipamentos para Interfaceamento', 'Nenhum equipamento registrado', true)
+              )}
+            </div>
+            <div className="doc-grid">
+              {renderCell('Integrações com Sistemas Externos', data.integracoes)}
               {renderCell('Responsável Técnico (TI do Cliente)', data.resp_ti, true)}
+            </div>
+          </div>
+
+          <div className="doc-section">
+            <h2>🛡️ Infraestrutura</h2>
+            <div className="doc-grid">
+              {renderCell('Possui Servidor Local?', data.infra_servidor)}
+              {data.infra_servidor === 'Sim' && renderCell('Dados de Acesso', data.infra_acesso)}
+              {data.infra_servidor === 'Sim' && renderCell('Especificações', data.infra_specs, true)}
+              
+              {data.printers.length > 0 && (
+                <div className="doc-grid full no-border">
+                  <table className="mini-table">
+                    <thead>
+                      <tr><th>Qtd</th><th>Marca</th><th>Modelo</th></tr>
+                    </thead>
+                    <tbody>
+                      {data.printers.map((ptr, i) => (
+                        <tr key={i}><td>{ptr.count}</td><td>{ptr.brand}</td><td>{ptr.model}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="doc-section">
+            <h2>🗓️ Cronograma e Disponibilidade</h2>
+            <div className="doc-grid">
+              {renderCell('Configurações', data.cron_config)}
+              {renderCell('Testes Interface', data.cron_test_interf)}
+              {renderCell('Treinamentos', data.cron_treino)}
+              {renderCell('Testes Integração', data.cron_test_integ)}
+              {renderCell('Disponibilidade do Cliente', data.disponibilidade_horas, true)}
             </div>
           </div>
 
@@ -324,6 +433,30 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
               </div>
             </div>
           </div>
+
+          {data.area_responsibles.length > 0 && (
+            <div className="area-resps-container">
+              <label className="sub-label">Responsáveis por Setor</label>
+              {data.area_responsibles.map((resp, i) => (
+                <div key={resp.area} className="area-resp-row">
+                  <div className="area-badge">{resp.area}</div>
+                  <input 
+                    type="text" 
+                    placeholder="Gerente/Responsável" 
+                    value={resp.manager} 
+                    onChange={(e) => handleAreaRespChange(i, 'manager', e.target.value)} 
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Contato (Tel/E-mail)" 
+                    value={resp.contact} 
+                    onChange={(e) => handleAreaRespChange(i, 'contact', e.target.value)} 
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="form-row full">
             <div className="field"><label>Observações sobre a operação</label>
               <textarea id="f_obs_contexto" value={data.obs_contexto} onChange={handleChange} placeholder="Detalhes relevantes sobre o funcionamento atual..." />
@@ -386,11 +519,38 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
       <div className="card">
         <div className="card-header"><span className="icon">🔌</span><h2>5. Integrações e Equipamentos</h2></div>
         <div className="card-body">
-          <div className="form-row full">
-            <div className="field"><label>Equipamentos que precisam de integração (Interfaceamento)</label>
-              <textarea id="f_equipamentos" value={data.equipamentos} onChange={handleChange} placeholder="Ex: Cobas C303..." />
+          <div className="field">
+            <label>Equipamentos que precisam de integração (Interfaceamento)</label>
+            <div className="analyzer-list">
+              {data.analyzers.map((ana, i) => (
+                <div key={i} className="analyzer-row">
+                  <input 
+                    type="text" 
+                    placeholder="Nome do Analisador (Ex: Cobas C303)" 
+                    value={ana.name}
+                    onChange={(e) => {
+                      const newList = [...data.analyzers];
+                      newList[i].name = e.target.value;
+                      setData({ ...data, analyzers: newList });
+                    }}
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Unidade/Local" 
+                    value={ana.unit}
+                    onChange={(e) => {
+                      const newList = [...data.analyzers];
+                      newList[i].unit = e.target.value;
+                      setData({ ...data, analyzers: newList });
+                    }}
+                  />
+                  <button className="btn-remove" onClick={() => removeAnalyzer(i)}>×</button>
+                </div>
+              ))}
+              <button className="btn-add-lite" onClick={addAnalyzer}>+ Adicionar Analisador</button>
             </div>
           </div>
+
           <div className="form-row full">
             <div className="field"><label>Integrações com sistemas externos</label>
               <div className="tag-group">
@@ -411,7 +571,127 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
       </div>
 
       <div className="card">
-        <div className="card-header"><span className="icon">🗄️</span><h2>6. Dados e Migração</h2></div>
+        <div className="card-header"><span className="icon">🛡️</span><h2>6. Infraestrutura</h2></div>
+        <div className="card-body">
+          <div className="form-row">
+            <div className="field">
+              <label>Possui Servidor Local/Próprio?</label>
+              <select id="f_infra_servidor" value={data.infra_servidor} onChange={handleChange}>
+                <option value="Não">Não</option>
+                <option value="Sim">Sim</option>
+              </select>
+            </div>
+            {data.infra_servidor === 'Sim' && (
+              <div className="field">
+                <label>Dados de Acesso (Tipo/VPN)</label>
+                <input id="f_infra_acesso" type="text" value={data.infra_acesso} onChange={handleChange} placeholder="Ex: VPN Fortilinux / RDP" />
+              </div>
+            )}
+          </div>
+          {data.infra_servidor === 'Sim' && (
+            <div className="form-row full">
+              <div className="field">
+                <label>Especificações do Servidor</label>
+                <textarea id="f_infra_specs" value={data.infra_specs} onChange={handleChange} placeholder="CPU, RAM, Disco, SO..." />
+              </div>
+            </div>
+          )}
+
+          <div className="field" style={{ marginTop: '20px' }}>
+            <label>Impressoras de Etiqueta</label>
+            <div className="printer-list">
+              {data.printers.map((ptr, i) => (
+                <div key={i} className="printer-row">
+                  <div className="field">
+                    <input 
+                      type="number" 
+                      placeholder="Qtd" 
+                      style={{ width: '60px' }}
+                      value={ptr.count}
+                      onChange={(e) => {
+                        const newList = [...data.printers];
+                        newList[i].count = parseInt(e.target.value);
+                        setData({ ...data, printers: newList });
+                      }}
+                    />
+                  </div>
+                  <div className="field">
+                    <select 
+                      value={ptr.brand}
+                      onChange={(e) => {
+                        const newList = [...data.printers];
+                        newList[i].brand = e.target.value as any;
+                        setData({ ...data, printers: newList });
+                      }}
+                    >
+                      <option value="">Marca</option>
+                      <option value="Elgin">Elgin</option>
+                      <option value="Zebra">Zebra</option>
+                      <option value="Argox">Argox</option>
+                    </select>
+                  </div>
+                  <div className="field" style={{ flex: 2 }}>
+                    <input 
+                      type="text" 
+                      placeholder="Modelo (Ex: L42 Pro)" 
+                      value={ptr.model}
+                      onChange={(e) => {
+                        const newList = [...data.printers];
+                        newList[i].model = e.target.value;
+                        setData({ ...data, printers: newList });
+                      }}
+                    />
+                  </div>
+                  <button className="btn-remove" onClick={() => removePrinter(i)}>×</button>
+                </div>
+              ))}
+              <button className="btn-add-lite" onClick={addPrinter}>+ Adicionar Impressora</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header"><span className="icon">🗓️</span><h2>7. Cronograma e Disponibilidade</h2></div>
+        <div className="card-body">
+          <p className="section-hint">Definição padrão para organização de etapas críticas:</p>
+          <div className="form-row">
+            <div className="field">
+              <label>Configurações de Sistema (Dias Previstos)</label>
+              <input id="f_cron_config" type="text" value={data.cron_config} onChange={handleChange} placeholder="Ex: Dias 05 a 10" />
+            </div>
+            <div className="field">
+              <label>Testes de Interfaceamento</label>
+              <input id="f_cron_test_interf" type="text" value={data.cron_test_interf} onChange={handleChange} placeholder="Ex: Semana 3" />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="field">
+              <label>Treinamentos de Equipe</label>
+              <input id="f_cron_treino" type="text" value={data.cron_treino} onChange={handleChange} placeholder="Ex: Dias 15 a 18" />
+            </div>
+            <div className="field">
+              <label>Testes de Integração</label>
+              <input id="f_cron_test_integ" type="text" value={data.cron_test_integ} onChange={handleChange} placeholder="Ex: Pré Go-Live" />
+            </div>
+          </div>
+          <div className="form-row full" style={{ marginTop: '10px' }}>
+            <div className="field">
+              <label>Disponibilidade Diária do Cliente (Horas/Dia para o Projeto)</label>
+              <input 
+                id="f_disponibilidade_horas" 
+                type="text" 
+                value={data.disponibilidade_horas} 
+                onChange={handleChange} 
+                placeholder="Ex: 4 horas por dia (Manhã)" 
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header"><span className="icon">🗄️</span><h2>8. Dados e Migração</h2></div>
         <div className="card-body">
           <div className="form-row full">
             <div className="field"><label>Quais cadastros precisam ser importados?</label>
@@ -447,7 +727,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
       </div>
 
       <div className="card">
-        <div className="card-header"><span className="icon">👥</span><h2>7. Pessoas e Responsabilidades</h2></div>
+        <div className="card-header"><span className="icon">👥</span><h2>9. Pessoas e Responsabilidades</h2></div>
         <div className="card-body">
           <div className="form-row">
             <div className="field"><label>Sponsor / Patrocinador do Projeto</label>
@@ -469,7 +749,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
       </div>
 
       <div className="card">
-        <div className="card-header"><span className="icon">📅</span><h2>8. Prazos e Disponibilidade</h2></div>
+        <div className="card-header"><span className="icon">📅</span><h2>10. Prazos e Disponibilidade Geral</h2></div>
         <div className="card-body">
           <div className="form-row">
             <div className="field"><label>Data desejada para Go-Live</label>
@@ -488,7 +768,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
       </div>
 
       <div className="card">
-        <div className="card-header"><span className="icon">⚠️</span><h2>9. Riscos e Pontos de Atenção</h2></div>
+        <div className="card-header"><span className="icon">⚠️</span><h2>11. Riscos e Pontos de Atenção</h2></div>
         <div className="card-body">
           <div id="riscos-container">
             {data.riscos.map((risco, index) => (
@@ -512,7 +792,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
       </div>
 
       <div className="card">
-        <div className="card-header"><span className="icon">📝</span><h2>10. Observações Finais</h2></div>
+        <div className="card-header"><span className="icon">📝</span><h2>12. Observações Finais</h2></div>
         <div className="card-body">
           <div className="form-row full">
             <div className="field"><label>Processos fora do padrão</label>
