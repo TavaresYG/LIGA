@@ -77,13 +77,23 @@ const ScheduleSelector: React.FC<{
   onChange: (days: DaySchedule[]) => void,
   label: string 
 }> = ({ days, onChange, label }) => {
+  const [globalStart, setGlobalStart] = useState('08:00');
+  const [globalEnd, setGlobalEnd] = useState('18:00');
+
   const addDay = (dayName: string) => {
     if (days.find(d => d.day === dayName)) return;
-    onChange([...days, { day: dayName, start: '08:00', end: '12:00' }]);
+    onChange([...days, { day: dayName, start: globalStart, end: globalEnd }]);
   };
 
   const removeDay = (dayName: string) => {
     onChange(days.filter(d => d.day !== dayName));
+  };
+
+  const updateGlobalTime = (field: 'start' | 'end', val: string) => {
+    if (field === 'start') setGlobalStart(val);
+    if (field === 'end') setGlobalEnd(val);
+    
+    onChange(days.map(d => ({ ...d, [field]: val })));
   };
 
   const updateTime = (dayName: string, field: 'start' | 'end', val: string) => {
@@ -92,28 +102,47 @@ const ScheduleSelector: React.FC<{
 
   return (
     <div className="schedule-selector">
-      <label className="sub-label">{label}</label>
-      <div className="day-chips">
+      {label && <label className="sub-label">{label}</label>}
+      
+      <div className="form-row" style={{ marginBottom: '15px' }}>
+        <div className="field">
+          <label>Horário Padrão (Início)</label>
+          <input type="time" value={globalStart} onChange={e => updateGlobalTime('start', e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Horário Padrão (Fim)</label>
+          <input type="time" value={globalEnd} onChange={e => updateGlobalTime('end', e.target.value)} />
+        </div>
+      </div>
+
+      <label className="sub-label">Dias da Semana</label>
+      <div className="tag-group" style={{ marginBottom: '15px' }}>
         {DAYS.map(d => (
-          <button 
-            key={d} 
-            className={`day-chip ${days.find(x => x.day === d) ? 'active' : ''}`}
-            onClick={() => days.find(x => x.day === d) ? removeDay(d) : addDay(d)}
-          >
-            {d.split('-')[0]}
-          </button>
+          <label key={d} className={days.find(x => x.day === d) ? 'checked' : ''}>
+            <input 
+              type="checkbox" 
+              checked={!!days.find(x => x.day === d)} 
+              onChange={() => days.find(x => x.day === d) ? removeDay(d) : addDay(d)} 
+            /> {d}
+          </label>
         ))}
       </div>
-      <div className="day-grid">
-        {days.map(d => (
-          <div key={d.day} className="day-row">
-            <span className="day-name">{d.day.split('-')[0]}</span>
-            <input type="time" value={d.start} onChange={e => updateTime(d.day, 'start', e.target.value)} />
-            <span>até</span>
-            <input type="time" value={d.end} onChange={e => updateTime(d.day, 'end', e.target.value)} />
-          </div>
-        ))}
-      </div>
+
+      {days.length > 0 && (
+        <div className="day-grid">
+          <label className="sub-label" style={{ fontSize: '11px', color: '#64748b' }}>Ajuste de horário específico por dia (opcional):</label>
+          {days.map(d => (
+            <div key={d.day} className="day-row">
+              <span className="day-name" style={{ minWidth: '110px' }}>{d.day}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input type="time" value={d.start} onChange={e => updateTime(d.day, 'start', e.target.value)} />
+                <span style={{ fontSize: '12px', color: '#64748b' }}>até</span>
+                <input type="time" value={d.end} onChange={e => updateTime(d.day, 'end', e.target.value)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -204,7 +233,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
         <tbody>
           {schedules.map((s, i) => (
             <tr key={i}>
-              <td style={{ fontWeight: 600, width: '100px' }}>{s.day.split('-')[0]}</td>
+              <td style={{ fontWeight: 600, width: '130px' }}>{s.day}</td>
               <td>{s.start} às {s.end}</td>
             </tr>
           ))}
@@ -564,19 +593,23 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
               <label className="sub-label">Responsáveis por Setor</label>
               {data.area_responsibles.map((resp, i) => (
                 <div key={resp.area} className="area-resp-row">
-                  <div className="area-badge">{resp.area}</div>
-                  <input 
-                    type="text" 
-                    placeholder="Gerente/Responsável" 
-                    value={resp.manager} 
-                    onChange={(e) => handleAreaRespChange(i, 'manager', e.target.value)} 
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Contato (Tel/E-mail)" 
-                    value={resp.contact} 
-                    onChange={(e) => handleAreaRespChange(i, 'contact', e.target.value)} 
-                  />
+                  <div className="area-badge" style={{ minWidth: '130px' }}>{resp.area}</div>
+                  <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                    <input 
+                      type="text" 
+                      placeholder="Gerente/Responsável" 
+                      value={resp.manager} 
+                      onChange={(e) => handleAreaRespChange(i, 'manager', e.target.value)} 
+                    />
+                  </div>
+                  <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                    <input 
+                      type="text" 
+                      placeholder="Contato (Tel/E-mail)" 
+                      value={resp.contact} 
+                      onChange={(e) => handleAreaRespChange(i, 'contact', e.target.value)} 
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -693,27 +726,31 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
               <label className="sub-label">Responsáveis Técnicos da Integração</label>
               {data.integracoes_detalhes.map((det, i) => (
                 <div key={det.key} className="integ-detail-row">
-                  <div className="integ-badge">{det.key}</div>
-                  <input 
-                    type="text" 
-                    placeholder="Técnico Responsável" 
-                    value={det.tech} 
-                    onChange={(e) => {
-                      const newList = [...data.integracoes_detalhes];
-                      newList[i].tech = e.target.value;
-                      setData({ ...data, integracoes_detalhes: newList });
-                    }} 
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Contato (Tel/E-mail)" 
-                    value={det.contact} 
-                    onChange={(e) => {
-                      const newList = [...data.integracoes_detalhes];
-                      newList[i].contact = e.target.value;
-                      setData({ ...data, integracoes_detalhes: newList });
-                    }} 
-                  />
+                  <div className="integ-badge" style={{ minWidth: '130px' }}>{det.key}</div>
+                  <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                    <input 
+                      type="text" 
+                      placeholder="Técnico Responsável" 
+                      value={det.tech} 
+                      onChange={(e) => {
+                        const newList = [...data.integracoes_detalhes];
+                        newList[i].tech = e.target.value;
+                        setData({ ...data, integracoes_detalhes: newList });
+                      }} 
+                    />
+                  </div>
+                  <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                    <input 
+                      type="text" 
+                      placeholder="Contato (Tel/E-mail)" 
+                      value={det.contact} 
+                      onChange={(e) => {
+                        const newList = [...data.integracoes_detalhes];
+                        newList[i].contact = e.target.value;
+                        setData({ ...data, integracoes_detalhes: newList });
+                      }} 
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -883,7 +920,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
                           const updated = current.includes(d) ? current.filter(x => x !== d) : [...current, d];
                           setData({ ...data, disponibilidade_semanal_dias: updated });
                         }} 
-                      /> {d.split('-')[0]}
+                      /> {d}
                     </label>
                   ))}
                 </div>
