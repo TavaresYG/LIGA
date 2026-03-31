@@ -20,6 +20,18 @@ export interface PrinterInfo {
   model: string;
 }
 
+export interface DaySchedule {
+  day: string;
+  start: string;
+  end: string;
+}
+
+export interface IntegrationDetailEntry {
+  key: string;
+  tech: string;
+  contact: string;
+}
+
 export interface FormData {
   nome: string;
   responsavel: string;
@@ -43,17 +55,24 @@ export interface FormData {
   equipamentos: string;
   analyzers: Analyzer[];
   integracoes: string[];
+  integracoes_detalhes: IntegrationDetailEntry[];
   resp_ti: string;
   infra_servidor: string; // 'Sim' | 'Não'
   infra_acesso: string;
   infra_specs: string;
+  infra_leitor: string; // 'Sim' | 'Não'
   printers: PrinterInfo[];
-  cron_config: string;
-  cron_test_interf: string;
-  cron_treino: string;
-  cron_test_integ: string;
-  disponibilidade_horas: string;
+  cron_config_days: DaySchedule[];
+  cron_test_interf_days: DaySchedule[];
+  cron_treino_days: DaySchedule[];
+  cron_test_integ_days: DaySchedule[];
+  disponibilidade_tipo: 'Diária' | 'Semanal';
+  disponibilidade_config_dias: DaySchedule[];
+  disponibilidade_semanal_dias: string[];
+  disponibilidade_semanal_horas_dia: string;
+  disponibilidade_semanal_horas_total: string;
   migracao: string[];
+  migracao_convenios_qtd: string;
   qualidade_base: string;
   prazo_base: string;
   resp_dados: string;
@@ -63,6 +82,7 @@ export interface FormData {
   resp_treinamento: string;
   golive: string;
   disponibilidade: string;
+  reunioes_config: DaySchedule[];
   periodos_criticos: string;
   prazo_contrato: string;
   riscos: Risk[];

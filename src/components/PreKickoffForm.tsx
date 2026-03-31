@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/form.css';
 
-import { FormData, SavedDoc, Risk } from '../types';
+import { FormData, SavedDoc, Risk, DaySchedule, IntegrationDetailEntry } from '../types';
 
 interface PreKickoffFormProps {
   initialData?: FormData;
@@ -32,17 +32,24 @@ const defaultData: FormData = {
   equipamentos: '',
   analyzers: [],
   integracoes: [],
+  integracoes_detalhes: [],
   resp_ti: '',
   infra_servidor: 'Não',
   infra_acesso: '',
   infra_specs: '',
+  infra_leitor: 'Não',
   printers: [],
-  cron_config: '',
-  cron_test_interf: '',
-  cron_treino: '',
-  cron_test_integ: '',
-  disponibilidade_horas: '',
+  cron_config_days: [],
+  cron_test_interf_days: [],
+  cron_treino_days: [],
+  cron_test_integ_days: [],
+  disponibilidade_tipo: 'Diária',
+  disponibilidade_config_dias: [],
+  disponibilidade_semanal_dias: [],
+  disponibilidade_semanal_horas_dia: '',
+  disponibilidade_semanal_horas_total: '',
   migracao: [],
+  migracao_convenios_qtd: '',
   qualidade_base: '',
   prazo_base: '',
   resp_dados: '',
@@ -52,6 +59,7 @@ const defaultData: FormData = {
   resp_treinamento: '',
   golive: '',
   disponibilidade: '',
+  reunioes_config: [],
   periodos_criticos: '',
   prazo_contrato: '',
   riscos: [{ desc: '', nivel: 'Média' }],
@@ -60,6 +68,54 @@ const defaultData: FormData = {
   pendencias: '',
   kickoff_date: '',
   kickoff_format: '',
+};
+
+const DAYS = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
+const ScheduleSelector: React.FC<{ 
+  days: DaySchedule[], 
+  onChange: (days: DaySchedule[]) => void,
+  label: string 
+}> = ({ days, onChange, label }) => {
+  const addDay = (dayName: string) => {
+    if (days.find(d => d.day === dayName)) return;
+    onChange([...days, { day: dayName, start: '08:00', end: '12:00' }]);
+  };
+
+  const removeDay = (dayName: string) => {
+    onChange(days.filter(d => d.day !== dayName));
+  };
+
+  const updateTime = (dayName: string, field: 'start' | 'end', val: string) => {
+    onChange(days.map(d => d.day === dayName ? { ...d, [field]: val } : d));
+  };
+
+  return (
+    <div className="schedule-selector">
+      <label className="sub-label">{label}</label>
+      <div className="day-chips">
+        {DAYS.map(d => (
+          <button 
+            key={d} 
+            className={`day-chip ${days.find(x => x.day === d) ? 'active' : ''}`}
+            onClick={() => days.find(x => x.day === d) ? removeDay(d) : addDay(d)}
+          >
+            {d.split('-')[0]}
+          </button>
+        ))}
+      </div>
+      <div className="day-grid">
+        {days.map(d => (
+          <div key={d.day} className="day-row">
+            <span className="day-name">{d.day.split('-')[0]}</span>
+            <input type="time" value={d.start} onChange={e => updateTime(d.day, 'start', e.target.value)} />
+            <span>até</span>
+            <input type="time" value={d.end} onChange={e => updateTime(d.day, 'end', e.target.value)} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, onCancel }) => {
@@ -90,7 +146,17 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
       }
     }
 
-    setData({ ...data, [name]: updated, area_responsibles: newResponsibles });
+    // Auto-manage integration details
+    let newIntegDetails = [...data.integracoes_detalhes];
+    if (name === 'integracoes') {
+      if (isAdding) {
+        newIntegDetails.push({ key: value, tech: '', contact: '' });
+      } else {
+        newIntegDetails = newIntegDetails.filter(d => d.key !== value);
+      }
+    }
+
+    setData({ ...data, [name]: updated, area_responsibles: newResponsibles, integracoes_detalhes: newIntegDetails });
   };
 
   const handleAreaRespChange = (index: number, field: 'manager' | 'contact', value: string) => {
@@ -129,6 +195,22 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
     if (!s) return '';
     const [y, m, d] = s.split('-');
     return `${d}/${m}/${y}`;
+  };
+
+  const renderScheduleTable = (schedules: DaySchedule[]) => {
+    if (!schedules || schedules.length === 0) return <span>Não definido</span>;
+    return (
+      <table className="mini-table">
+        <tbody>
+          {schedules.map((s, i) => (
+            <tr key={i}>
+              <td style={{ fontWeight: 600, width: '100px' }}>{s.day.split('-')[0]}</td>
+              <td>{s.start} às {s.end}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
   };
 
   const renderCell = (label: string, value: string | string[], full = false) => {
@@ -233,9 +315,28 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
                   </tbody>
                 </table>
               ) : (
-                renderCell('Equipamentos para Interfaceamento', 'Nenhum equipamento registrado', true)
+                <div className="doc-cell full">
+                  <label>Equipamentos para Interfaceamento</label>
+                  <span>Nenhum equipamento registrado</span>
+                </div>
               )}
             </div>
+            
+            {data.integracoes_detalhes.length > 0 && (
+              <div className="doc-grid full no-border" style={{ marginTop: '10px' }}>
+                <table className="mini-table">
+                  <thead>
+                    <tr><th>Integração</th><th>Responsável Técnico</th><th>Contato</th></tr>
+                  </thead>
+                  <tbody>
+                    {data.integracoes_detalhes.map((det, i) => (
+                      <tr key={i}><td>{det.key}</td><td>{det.tech}</td><td>{det.contact}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             <div className="doc-grid">
               {renderCell('Integrações com Sistemas Externos', data.integracoes)}
               {renderCell('Responsável Técnico (TI do Cliente)', data.resp_ti, true)}
@@ -248,6 +349,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
               {renderCell('Possui Servidor Local?', data.infra_servidor)}
               {data.infra_servidor === 'Sim' && renderCell('Dados de Acesso', data.infra_acesso)}
               {data.infra_servidor === 'Sim' && renderCell('Especificações', data.infra_specs, true)}
+              {renderCell('Possui Leitor de Código de Barras?', data.infra_leitor, true)}
               
               {data.printers.length > 0 && (
                 <div className="doc-grid full no-border">
@@ -268,12 +370,31 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
 
           <div className="doc-section">
             <h2>🗓️ Cronograma e Disponibilidade</h2>
-            <div className="doc-grid">
-              {renderCell('Configurações', data.cron_config)}
-              {renderCell('Testes Interface', data.cron_test_interf)}
-              {renderCell('Treinamentos', data.cron_treino)}
-              {renderCell('Testes Integração', data.cron_test_integ)}
-              {renderCell('Disponibilidade do Cliente', data.disponibilidade_horas, true)}
+            <div className="doc-grid full no-border">
+              <table className="mini-table schedule-preview">
+                <thead>
+                  <tr><th>Etapa</th><th>Dias e Horários Previstos</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Testes / Config. Sistema</td><td>{renderScheduleTable(data.cron_config_days)}</td></tr>
+                  <tr><td>Testes / Interfaceamento</td><td>{renderScheduleTable(data.cron_test_interf_days)}</td></tr>
+                  <tr><td>Treinamentos de Equipe</td><td>{renderScheduleTable(data.cron_treino_days)}</td></tr>
+                  <tr><td>Testes de Integração</td><td>{renderScheduleTable(data.cron_test_integ_days)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="doc-grid full">
+              <div className="doc-cell full">
+                <label>Disponibilidade do Cliente ({data.disponibilidade_tipo})</label>
+                {data.disponibilidade_tipo === 'Diária' ? (
+                  renderScheduleTable(data.disponibilidade_config_dias)
+                ) : (
+                  <div>
+                    <strong>Dias:</strong> {data.disponibilidade_semanal_dias.join(', ')} <br/>
+                    <strong>Carga Horária:</strong> {data.disponibilidade_semanal_horas_dia} por dia / {data.disponibilidade_semanal_horas_total} por semana
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -281,6 +402,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
             <h2>🗄️ Dados e Migração</h2>
             <div className="doc-grid">
               {renderCell('Cadastros para Importar', data.migracao)}
+              {renderCell('Qtd de Convênios', data.migracao_convenios_qtd)}
               {renderCell('Qualidade da Base', data.qualidade_base)}
               {renderCell('Prazo para Entrega das Bases', fmtDate(data.prazo_base))}
               {renderCell('Responsável pelos Dados', data.resp_dados)}
@@ -298,12 +420,15 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
           </div>
 
           <div className="doc-section">
-            <h2>📅 Prazos e Disponibilidade</h2>
+            <h2>📅 Prazos e Disponibilidade Geral</h2>
             <div className="doc-grid">
-              {renderCell('Data Desejada Go-Live', fmtDate(data.golive))}
-              {renderCell('Disponibilidade', data.disponibilidade)}
-              {renderCell('Períodos Críticos', data.periodos_criticos)}
-              {renderCell('Impactos Contratuais', data.prazo_contrato)}
+              {renderCell('Data Desejada Go-Live (VIRADA DO SISTEMA)', fmtDate(data.golive))}
+              <div className="doc-cell full">
+                <label>Disponibilidade de reuniões</label>
+                {renderScheduleTable(data.reunioes_config)}
+              </div>
+              {renderCell('Períodos Críticos', data.periodos_criticos, true)}
+              {renderCell('Impactos Contratuais', data.prazo_contrato, true)}
             </div>
           </div>
 
@@ -562,6 +687,37 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
               </div>
             </div>
           </div>
+
+          {data.integracoes_detalhes.length > 0 && (
+            <div className="integ-details-container">
+              <label className="sub-label">Responsáveis Técnicos da Integração</label>
+              {data.integracoes_detalhes.map((det, i) => (
+                <div key={det.key} className="integ-detail-row">
+                  <div className="integ-badge">{det.key}</div>
+                  <input 
+                    type="text" 
+                    placeholder="Técnico Responsável" 
+                    value={det.tech} 
+                    onChange={(e) => {
+                      const newList = [...data.integracoes_detalhes];
+                      newList[i].tech = e.target.value;
+                      setData({ ...data, integracoes_detalhes: newList });
+                    }} 
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Contato (Tel/E-mail)" 
+                    value={det.contact} 
+                    onChange={(e) => {
+                      const newList = [...data.integracoes_detalhes];
+                      newList[i].contact = e.target.value;
+                      setData({ ...data, integracoes_detalhes: newList });
+                    }} 
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           <div className="form-row full">
             <div className="field"><label>Responsável técnico do cliente para integrações</label>
               <input id="f_resp_ti" type="text" value={data.resp_ti} onChange={handleChange} placeholder="Nome e contato do responsável de TI" />
@@ -596,6 +752,16 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
               </div>
             </div>
           )}
+
+          <div className="form-row">
+            <div className="field">
+              <label>Possui Leitor de Código de Barras?</label>
+              <select id="f_infra_leitor" value={data.infra_leitor} onChange={handleChange}>
+                <option value="Não">Não</option>
+                <option value="Sim">Sim</option>
+              </select>
+            </div>
+          </div>
 
           <div className="field" style={{ marginTop: '20px' }}>
             <label>Impressoras de Etiqueta</label>
@@ -654,38 +820,95 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
       <div className="card">
         <div className="card-header"><span className="icon">🗓️</span><h2>7. Cronograma e Disponibilidade</h2></div>
         <div className="card-body">
-          <p className="section-hint">Definição padrão para organização de etapas críticas:</p>
-          <div className="form-row">
+          <p className="section-hint">Defina os dias e horários previstos para cada etapa:</p>
+          
+          <ScheduleSelector 
+            label="Testes / Configurações de Sistema" 
+            days={data.cron_config_days} 
+            onChange={(days) => setData({ ...data, cron_config_days: days })} 
+          />
+          
+          <ScheduleSelector 
+            label="Testes / Interfaceamento de Equipamentos" 
+            days={data.cron_test_interf_days} 
+            onChange={(days) => setData({ ...data, cron_test_interf_days: days })} 
+          />
+
+          <ScheduleSelector 
+            label="Treinamentos de Equipe" 
+            days={data.cron_treino_days} 
+            onChange={(days) => setData({ ...data, cron_treino_days: days })} 
+          />
+
+          <ScheduleSelector 
+            label="Testes de Integração" 
+            days={data.cron_test_integ_days} 
+            onChange={(days) => setData({ ...data, cron_test_integ_days: days })} 
+          />
+
+          <div className="disponibilidade-box" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
             <div className="field">
-              <label>Configurações de Sistema (Dias Previstos)</label>
-              <input id="f_cron_config" type="text" value={data.cron_config} onChange={handleChange} placeholder="Ex: Dias 05 a 10" />
+              <label>Tipo de Disponibilidade do Cliente (Dedicação ao Projeto)</label>
+              <div className="tag-group">
+                {['Diária', 'Semanal'].map(t => (
+                  <label key={t} className={data.disponibilidade_tipo === t ? 'checked' : ''}>
+                    <input 
+                      type="radio" 
+                      name="disp_tipo" 
+                      checked={data.disponibilidade_tipo === t} 
+                      onChange={() => setData({ ...data, disponibilidade_tipo: t as any })} 
+                    /> {t}
+                  </label>
+                ))}
+              </div>
             </div>
-            <div className="field">
-              <label>Testes de Interfaceamento</label>
-              <input id="f_cron_test_interf" type="text" value={data.cron_test_interf} onChange={handleChange} placeholder="Ex: Semana 3" />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="field">
-              <label>Treinamentos de Equipe</label>
-              <input id="f_cron_treino" type="text" value={data.cron_treino} onChange={handleChange} placeholder="Ex: Dias 15 a 18" />
-            </div>
-            <div className="field">
-              <label>Testes de Integração</label>
-              <input id="f_cron_test_integ" type="text" value={data.cron_test_integ} onChange={handleChange} placeholder="Ex: Pré Go-Live" />
-            </div>
-          </div>
-          <div className="form-row full" style={{ marginTop: '10px' }}>
-            <div className="field">
-              <label>Disponibilidade Diária do Cliente (Horas/Dia para o Projeto)</label>
-              <input 
-                id="f_disponibilidade_horas" 
-                type="text" 
-                value={data.disponibilidade_horas} 
-                onChange={handleChange} 
-                placeholder="Ex: 4 horas por dia (Manhã)" 
+
+            {data.disponibilidade_tipo === 'Diária' ? (
+              <ScheduleSelector 
+                label="Disponibilidade Diária" 
+                days={data.disponibilidade_config_dias} 
+                onChange={(days) => setData({ ...data, disponibilidade_config_dias: days })} 
               />
-            </div>
+            ) : (
+              <div className="semanal-config">
+                <label className="sub-label">Dias de Disponibilidade</label>
+                <div className="tag-group">
+                  {DAYS.map(d => (
+                    <label key={d} className={data.disponibilidade_semanal_dias.includes(d) ? 'checked' : ''}>
+                      <input 
+                        type="checkbox" 
+                        checked={data.disponibilidade_semanal_dias.includes(d)} 
+                        onChange={() => {
+                          const current = data.disponibilidade_semanal_dias;
+                          const updated = current.includes(d) ? current.filter(x => x !== d) : [...current, d];
+                          setData({ ...data, disponibilidade_semanal_dias: updated });
+                        }} 
+                      /> {d.split('-')[0]}
+                    </label>
+                  ))}
+                </div>
+                <div className="form-row" style={{ marginTop: '10px' }}>
+                  <div className="field">
+                    <label>Horas Disponíveis por Dia</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: 4 horas" 
+                      value={data.disponibilidade_semanal_horas_dia} 
+                      onChange={(e) => setData({ ...data, disponibilidade_semanal_horas_dia: e.target.value })} 
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Horas Disponíveis por Semana</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: 20 horas" 
+                      value={data.disponibilidade_semanal_horas_total} 
+                      onChange={(e) => setData({ ...data, disponibilidade_semanal_horas_total: e.target.value })} 
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -696,12 +919,18 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
           <div className="form-row full">
             <div className="field"><label>Quais cadastros precisam ser importados?</label>
               <div className="tag-group">
-                {['Pacientes/Clientes', 'Convênios/Planos', 'Exames/Tabela de preços', 'Médicos solicitantes', 'Histórico de laudos'].map(mig => (
+                {['Pacientes/Clientes', 'Convênios/Planos', 'Exames/Tabela de preços', 'Médicos solicitantes'].map(mig => (
                   <label key={mig} className={data.migracao.includes(mig) ? 'checked' : ''}>
                     <input type="checkbox" checked={data.migracao.includes(mig)} onChange={() => handleCheckbox('migracao', mig)} /> {mig}
                   </label>
                 ))}
               </div>
+            </div>
+          </div>
+          <div className="form-row full">
+            <div className="field">
+              <label>Quantidade de Convênios Atendidos</label>
+              <input id="f_migracao_convenios_qtd" type="text" value={data.migracao_convenios_qtd} onChange={handleChange} placeholder="Ex: 40 convênios" />
             </div>
           </div>
           <div className="form-row">
@@ -752,11 +981,18 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
         <div className="card-header"><span className="icon">📅</span><h2>10. Prazos e Disponibilidade Geral</h2></div>
         <div className="card-body">
           <div className="form-row">
-            <div className="field"><label>Data desejada para Go-Live</label>
+            <div className="field"><label>Data desejada para Go-Live (VIRADA DO SISTEMA)</label>
               <input id="f_golive" type="date" value={data.golive} onChange={handleChange} />
             </div>
-            <div className="field"><label>Disponibilidade de reuniões</label>
-              <input id="f_disponibilidade" type="text" value={data.disponibilidade} onChange={handleChange} placeholder="Ex: terças e quintas" />
+          </div>
+          <div className="form-row full">
+            <div className="field">
+              <label>Disponibilidade de reuniões</label>
+              <ScheduleSelector 
+                label="" 
+                days={data.reunioes_config} 
+                onChange={(days) => setData({ ...data, reunioes_config: days })} 
+              />
             </div>
           </div>
           <div className="form-row full">
