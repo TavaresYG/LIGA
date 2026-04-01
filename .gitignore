@@ -1,0 +1,12 @@
+node_modules
+.env
+dist
+build
+.DS_Store
+*.log
+ts_out.txt
+tsc_errors.log
+server/node_modules
+server/.env
+server/test_conn.js
+server/create_db_script.js

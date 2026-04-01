@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { SavedDoc } from '../types';
 import { FileText, Plus, Search, Trash2, Printer } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+const API_URL = 'http://localhost:5000/api';
 
 interface DashboardProps {
   onNewDoc: () => void;
@@ -8,28 +11,71 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNewDoc, onViewDoc }) => {
+  const { token } = useAuth();
   const [docs, setDocs] = useState<SavedDoc[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const fetchDocs = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_URL}/documents`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Map snake_case from DB to camelCase for frontend
+        const mappedDocs: SavedDoc[] = data.map((d: any) => ({
+          id: d.id,
+          type: d.type,
+          clientName: d.client_name,
+          date: d.date,
+          implantador: d.implantador,
+          data: d.data,
+          createdAt: d.created_at
+        }));
+        setDocs(mappedDocs);
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const saved = localStorage.getItem('liga_documents');
-    if (saved) {
-      setDocs(JSON.parse(saved));
-    }
-  }, []);
+    fetchDocs();
+  }, [token]);
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!token) return;
+    
     if (confirm('Deseja realmente excluir este documento?')) {
-      const updated = docs.filter(d => d.id !== id);
-      setDocs(updated);
-      localStorage.setItem('liga_documents', JSON.stringify(updated));
+      try {
+        const response = await fetch(`${API_URL}/documents/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          setDocs(docs.filter(d => d.id !== id));
+        } else {
+          alert('Erro ao excluir documento');
+        }
+      } catch (err) {
+        console.error('Delete error:', err);
+        alert('Falha ao conectar com o servidor');
+      }
     }
   };
 
   const filteredDocs = docs.filter(d => 
-    d.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    d.implantador.toLowerCase().includes(searchTerm.toLowerCase())
+    (d.clientName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (d.implantador?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -67,7 +113,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewDoc, onViewDoc }) => {
               </tr>
             </thead>
             <tbody>
-              {filteredDocs.length > 0 ? filteredDocs.map((doc) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '3rem' }}>Carregando documentos...</td>
+                </tr>
+              ) : filteredDocs.length > 0 ? filteredDocs.map((doc) => (
                 <tr key={doc.id} onClick={() => onViewDoc(doc)} style={{ cursor: 'pointer' }}>
                   <td>
                     <div className="doc-type">

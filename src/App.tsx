@@ -8,8 +8,10 @@ import { SavedDoc, FormData } from './types'
 import { Sun, Moon, LogOut, User } from 'lucide-react'
 import './App.css'
 
+const API_URL = 'http://localhost:5000/api';
+
 function AppContent() {
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading, token } = useAuth();
   const [view, setView] = useState<'dashboard' | 'form'>('dashboard');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [editingDoc, setEditingDoc] = useState<SavedDoc | null>(null);
@@ -38,37 +40,49 @@ function AppContent() {
 
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
-  const handleSave = (formData: FormData) => {
-    const saved = localStorage.getItem('liga_documents');
-    const docs: SavedDoc[] = saved ? JSON.parse(saved) : [];
-    
-    if (editingDoc) {
-      const index = docs.findIndex(d => d.id === editingDoc.id);
-      if (index !== -1) {
-        docs[index] = {
-          ...editingDoc,
-          clientName: formData.nome,
-          date: formData.kickoff_date || formData.data,
-          implantador: formData.implantador,
-          data: formData
-        };
+  const handleSave = async (formData: FormData) => {
+    if (!token) return;
+
+    const body = {
+      clientName: formData.nome,
+      date: formData.kickoff_date || formData.data,
+      implantador: formData.implantador,
+      data: formData
+    };
+
+    try {
+      let response;
+      if (editingDoc) {
+        response = await fetch(`${API_URL}/documents/${editingDoc.id}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(body)
+        });
+      } else {
+        response = await fetch(`${API_URL}/documents`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ ...body, type: 'pre-kickoff' })
+        });
       }
-    } else {
-      const newDoc: SavedDoc = {
-        id: `doc-${Date.now()}`,
-        type: 'pre-kickoff',
-        clientName: formData.nome,
-        date: formData.kickoff_date || formData.data,
-        implantador: formData.implantador,
-        data: formData,
-        createdAt: new Date().toISOString()
-      };
-      docs.push(newDoc);
+
+      if (response.ok) {
+        setView('dashboard');
+        setEditingDoc(null);
+      } else {
+        const errData = await response.json();
+        alert('Erro ao salvar: ' + errData.error);
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      alert('Falha ao conectar com o servidor');
     }
-    
-    localStorage.setItem('liga_documents', JSON.stringify(docs));
-    setView('dashboard');
-    setEditingDoc(null);
   };
 
   return (
