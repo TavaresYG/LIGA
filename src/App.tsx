@@ -6,14 +6,15 @@ import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import RankingPage from './pages/RankingPage'
 import StorePage from './pages/StorePage'
+import StatementPage from './pages/StatementPage'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SavedDoc, FormData } from './types'
-import { Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag, Settings } from 'lucide-react'
+import { Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag, Settings, Receipt } from 'lucide-react'
 import './App.css'
 
 const API_URL = 'http://localhost:5000/api';
 
-type View = 'dashboard' | 'form' | 'ranking' | 'loja';
+type View = 'dashboard' | 'form' | 'ranking' | 'loja' | 'extrato';
 
 function AppContent() {
   const { user, logout, loading, token } = useAuth();
@@ -94,6 +95,7 @@ function AppContent() {
     { key: 'dashboard' as View, label: 'DocCenter', icon: <LayoutDashboard size={18} /> },
     { key: 'ranking' as View, label: 'Ranking', icon: <Trophy size={18} /> },
     { key: 'loja' as View, label: 'Loja', icon: <ShoppingBag size={18} /> },
+    { key: 'extrato' as View, label: 'Extrato', icon: <Receipt size={18} /> },
   ];
 
   return (
@@ -158,6 +160,7 @@ function AppContent() {
         )}
         {view === 'ranking' && <RankingPage />}
         {view === 'loja' && <StorePage />}
+        {view === 'extrato' && <StatementPage />}
       </main>
 
       {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}

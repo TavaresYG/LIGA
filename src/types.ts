@@ -63,9 +63,13 @@ export interface FormData {
   infra_leitor: string; // 'Sim' | 'Não'
   printers: PrinterInfo[];
   cron_config_days: DaySchedule[];
+  cron_config_resp: string;
   cron_test_interf_days: DaySchedule[];
+  cron_test_interf_resp: string;
   cron_treino_days: DaySchedule[];
+  cron_treino_resp: string;
   cron_test_integ_days: DaySchedule[];
+  cron_test_integ_resp: string;
   disponibilidade_tipo: 'Diária' | 'Semanal';
   disponibilidade_config_dias: DaySchedule[];
   disponibilidade_semanal_dias: string[];

@@ -199,3 +199,36 @@
 .schedule-preview { margin-bottom: 0; border: none; }
 .schedule-preview tr:last-child td { border-bottom: none; }
 .schedule-preview td { vertical-align: top !important; }
+
+/* Schedule item block with responsible field */
+.schedule-item-block {
+  margin-bottom: 20px;
+  background: var(--bg-page);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.schedule-item-block .schedule-selector {
+  border: none;
+  border-radius: 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.schedule-item-block .schedule-resp {
+  padding: 12px 16px;
+  background: var(--bg-card);
+}
+
+.schedule-resp label {
+  font-size: 11px !important;
+  color: var(--accent) !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.schedule-resp input {
+  margin-top: 4px;
+}

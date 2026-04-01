@@ -40,9 +40,13 @@ const defaultData: FormData = {
   infra_leitor: 'Não',
   printers: [],
   cron_config_days: [],
+  cron_config_resp: '',
   cron_test_interf_days: [],
+  cron_test_interf_resp: '',
   cron_treino_days: [],
+  cron_treino_resp: '',
   cron_test_integ_days: [],
+  cron_test_integ_resp: '',
   disponibilidade_tipo: 'Diária',
   disponibilidade_config_dias: [],
   disponibilidade_semanal_dias: [],
@@ -879,29 +883,73 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
         <div className="card-body">
           <p className="section-hint">Defina os dias e horários previstos para cada etapa:</p>
           
-          <ScheduleSelector 
-            label="Testes / Configurações de Sistema" 
-            days={data.cron_config_days} 
-            onChange={(days) => setData({ ...data, cron_config_days: days })} 
-          />
-          
-          <ScheduleSelector 
-            label="Testes / Interfaceamento de Equipamentos" 
-            days={data.cron_test_interf_days} 
-            onChange={(days) => setData({ ...data, cron_test_interf_days: days })} 
-          />
+          <div className="schedule-item-block">
+            <ScheduleSelector 
+              label="Testes / Configurações de Sistema" 
+              days={data.cron_config_days} 
+              onChange={(days) => setData({ ...data, cron_config_days: days })} 
+            />
+            <div className="field schedule-resp">
+              <label>Responsável — Testes / Configurações de Sistema</label>
+              <input
+                type="text"
+                placeholder="Nome do responsável..."
+                value={data.cron_config_resp || ''}
+                onChange={(e) => setData({ ...data, cron_config_resp: e.target.value })}
+              />
+            </div>
+          </div>
 
-          <ScheduleSelector 
-            label="Treinamentos de Equipe" 
-            days={data.cron_treino_days} 
-            onChange={(days) => setData({ ...data, cron_treino_days: days })} 
-          />
+          <div className="schedule-item-block">
+            <ScheduleSelector 
+              label="Testes / Interfaceamento de Equipamentos" 
+              days={data.cron_test_interf_days} 
+              onChange={(days) => setData({ ...data, cron_test_interf_days: days })} 
+            />
+            <div className="field schedule-resp">
+              <label>Responsável — Testes / Interfaceamento de Equipamentos</label>
+              <input
+                type="text"
+                placeholder="Nome do responsável..."
+                value={data.cron_test_interf_resp || ''}
+                onChange={(e) => setData({ ...data, cron_test_interf_resp: e.target.value })}
+              />
+            </div>
+          </div>
 
-          <ScheduleSelector 
-            label="Testes de Integração" 
-            days={data.cron_test_integ_days} 
-            onChange={(days) => setData({ ...data, cron_test_integ_days: days })} 
-          />
+          <div className="schedule-item-block">
+            <ScheduleSelector 
+              label="Treinamentos de Equipe (Replicador)" 
+              days={data.cron_treino_days} 
+              onChange={(days) => setData({ ...data, cron_treino_days: days })} 
+            />
+            <div className="field schedule-resp">
+              <label>Responsável — Treinamentos de Equipe (Replicador)</label>
+              <input
+                type="text"
+                placeholder="Nome do responsável..."
+                value={data.cron_treino_resp || ''}
+                onChange={(e) => setData({ ...data, cron_treino_resp: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="schedule-item-block">
+            <ScheduleSelector 
+              label="Testes de Integração" 
+              days={data.cron_test_integ_days} 
+              onChange={(days) => setData({ ...data, cron_test_integ_days: days })} 
+            />
+            <div className="field schedule-resp">
+              <label>Responsável — Testes de Integração</label>
+              <input
+                type="text"
+                placeholder="Nome do responsável..."
+                value={data.cron_test_integ_resp || ''}
+                onChange={(e) => setData({ ...data, cron_test_integ_resp: e.target.value })}
+              />
+            </div>
+          </div>
 
           <div className="disponibilidade-box" style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
             <div className="field">

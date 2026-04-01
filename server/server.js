@@ -546,6 +546,66 @@ app.post('/api/featured-prize', authenticateToken, requireAdmin, async (req, res
   }
 });
 
+// ===================== POINTS STATEMENT =====================
+
+// GET /api/me/statement — unified point history for the logged-in user
+app.get('/api/me/statement', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Approved task completions (earn points)
+    const tasks = await pool.query(`
+      SELECT
+        tc.id,
+        'task' AS type,
+        tt.name AS description,
+        tc.points_awarded AS points,
+        tc.approved_at AS date,
+        tc.notes
+      FROM task_completions tc
+      LEFT JOIN task_types tt ON tt.id = tc.task_type_id
+      WHERE tc.user_id = $1 AND tc.status = 'approved'
+    `, [userId]);
+
+    // Bonuses (earn points)
+    const bonuses = await pool.query(`
+      SELECT
+        b.id,
+        'bonus' AS type,
+        COALESCE('Bônus: ' || b.reason, 'Bônus de Equipe') AS description,
+        b.points AS points,
+        b.created_at AS date,
+        b.reason AS notes
+      FROM bonuses b
+      WHERE b.user_id = $1
+    `, [userId]);
+
+    // Redemptions (spend points)
+    const redemptions = await pool.query(`
+      SELECT
+        r.id,
+        'redemption' AS type,
+        'Resgate: ' || r.item_name AS description,
+        -r.points_spent AS points,
+        r.created_at AS date,
+        r.status AS notes
+      FROM redemptions r
+      WHERE r.user_id = $1 AND r.status != 'cancelled'
+    `, [userId]);
+
+    // Merge and sort by date descending
+    const all = [
+      ...tasks.rows,
+      ...bonuses.rows,
+      ...redemptions.rows,
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    res.json(all);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar extrato: ' + err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
