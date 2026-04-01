@@ -34,6 +34,19 @@ const requireAdmin = async (req, res, next) => {
     }
     next();
   } catch (err) {
+    res.status(500).json({ error: 'Erro ao verificar permissão de admin' });
+  }
+};
+
+const requireOrganizadorOrAdmin = async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
+    const role = result.rows.length > 0 ? result.rows[0].role : 'member';
+    if (role !== 'admin' && role !== 'organizador') {
+      return res.status(403).json({ error: 'Acesso restrito a organizadores ou administradores' });
+    }
+    next();
+  } catch (err) {
     res.status(500).json({ error: 'Erro ao verificar permissão' });
   }
 };
@@ -83,8 +96,8 @@ app.get('/api/me/role', authenticateToken, async (req, res) => {
   }
 });
 
-// Get all users (admin use)
-app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+// Get all users (admin or organizer use)
+app.get('/api/users', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
   try {
     const result = await pool.query('SELECT id, name, username, email FROM users ORDER BY name');
     res.json(result.rows);
@@ -308,8 +321,8 @@ app.put('/api/task-types/:id', authenticateToken, requireAdmin, async (req, res)
 
 // ===================== TASK COMPLETIONS =====================
 
-// Admin registers a task completion for a member
-app.post('/api/task-completions', authenticateToken, requireAdmin, async (req, res) => {
+// Admin or Organizer registers a task completion for a member
+app.post('/api/task-completions', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
   const { userId, taskTypeId, notes } = req.body;
   try {
     const taskResult = await pool.query('SELECT points FROM task_types WHERE id = $1', [taskTypeId]);

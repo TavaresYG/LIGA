@@ -21,7 +21,7 @@ function AppContent() {
   const [view, setView] = useState<View>('dashboard');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [editingDoc, setEditingDoc] = useState<SavedDoc | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<string>('member');
   const [showAdmin, setShowAdmin] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('liga_theme') as 'light' | 'dark') || 'light';
@@ -36,9 +36,16 @@ function AppContent() {
     if (!token) return;
     fetch(`${API_URL}/me/role`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(d => setIsAdmin(d.role === 'admin'))
+      .then(d => {
+        // Failsafe for Yuri.Tavares and handle roles
+        let role = d.role || 'member';
+        if (user?.username === 'Yuri.Tavares') role = 'admin';
+        setUserRole(role);
+      })
       .catch(() => {});
-  }, [token]);
+  }, [token, user]);
+
+  const canAccessAdmin = userRole === 'admin' || userRole === 'organizador';
 
   if (loading) return null;
 
@@ -127,7 +134,7 @@ function AppContent() {
               <span>{user.name} (@{user.username})</span>
             </div>
 
-            {isAdmin && (
+            {canAccessAdmin && (
               <button onClick={() => setShowAdmin(true)} className="admin-btn" title="Painel Admin">
                 <Settings size={20} />
               </button>
@@ -163,7 +170,7 @@ function AppContent() {
         {view === 'extrato' && <StatementPage />}
       </main>
 
-      {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
+      {showAdmin && <AdminPanel role={userRole} onClose={() => setShowAdmin(false)} />}
     </div>
   )
 }
