@@ -99,10 +99,55 @@ app.get('/api/me/role', authenticateToken, async (req, res) => {
 // Get all users (admin or organizer use)
 app.get('/api/users', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, username, email FROM users ORDER BY name');
+    const result = await pool.query(`
+      SELECT u.id, u.name, u.username, u.email, COALESCE(ur.role, 'member') as role 
+      FROM users u 
+      LEFT JOIN user_roles ur ON u.id = ur.user_id 
+      ORDER BY u.name
+    `);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar usuários' });
+  }
+});
+
+app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+  const { name, username, email, password, role } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (name, username, email, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, username, email',
+      [name, username, email, hashedPassword]
+    );
+    const user = result.rows[0];
+    if (role && role !== 'member') {
+      await pool.query('INSERT INTO user_roles (user_id, role) VALUES ($1, $2)', [user.id, role]);
+      user.role = role;
+    } else {
+      user.role = 'member';
+    }
+    res.status(201).json(user);
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'Usuário ou e-mail já cadastrado' });
+    res.status(500).json({ error: 'Erro ao criar usuário remoto' });
+  }
+});
+
+app.put('/api/users/:id/role', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+  try {
+    if (role === 'member') {
+       await pool.query('DELETE FROM user_roles WHERE user_id = $1', [id]);
+    } else {
+       await pool.query(`
+         INSERT INTO user_roles (user_id, role) VALUES ($1, $2)
+         ON CONFLICT (user_id) DO UPDATE SET role = $2
+       `, [id, role]);
+    }
+    res.json({ message: 'Permissão atualizada' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar permissão' });
   }
 });
 

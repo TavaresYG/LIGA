@@ -11,15 +11,16 @@ import {
   X,
   ChevronRight,
   Settings,
-  LayoutDashboard
+  LayoutDashboard,
+  Users
 } from 'lucide-react';
 import '../styles/admin.css';
 
 const API_URL = 'http://localhost:5000/api';
 
-type AdminTab = 'meta' | 'registry' | 'pending' | 'store' | 'bonuses' | 'redemptions' | 'prize';
+type AdminTab = 'meta' | 'registry' | 'pending' | 'store' | 'bonuses' | 'redemptions' | 'prize' | 'users';
 
-interface User { id: string; name: string; username: string; }
+interface User { id: string; name: string; username: string; email?: string; role?: string; }
 interface TaskType { id: string; name: string; points: number; tipo: string; validation_rule_name?: string; }
 interface ValidationRule { id: string; name: string; }
 interface StoreCategory { id: string; name: string; }
@@ -144,6 +145,21 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
     if (ok) { showMsg('✅ Entrega confirmada!'); setRedemptions(prev => prev.map(r => r.id === id ? { ...r, status: 'fulfilled' } : r)); }
   };
 
+  // ---- User Form (Admin Only) ----
+  const [userForm, setUserForm] = useState({ name: '', username: '', email: '', password: '', role: 'member' });
+  const submitUser = async () => {
+    if (!userForm.name || !userForm.username || !userForm.email || !userForm.password) { showMsg('❌ Preencha todos os campos!'); return; }
+    const { ok, data } = await api('/users', { method: 'POST', headers: h(), body: JSON.stringify(userForm) });
+    if (ok) { showMsg('✅ Usuário criado!'); setUserForm({ name: '', username: '', email: '', password: '', role: 'member' }); setUsers(prev => [...prev, data]); }
+    else { showMsg('❌ ' + (data.error || 'Erro ao criar usuário')); }
+  };
+
+  const updateUserRole = async (userId: string, newRole: string) => {
+    const { ok } = await api(`/users/${userId}/role`, { method: 'PUT', headers: h(), body: JSON.stringify({ role: newRole }) });
+    if (ok) { showMsg('✅ Permissão atualizada!'); setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u)); }
+    else { showMsg('❌ Erro ao atualizar permissão'); }
+  };
+
   // Filter tabs based on role
   const allTabs: { key: AdminTab; label: string; icon: React.ReactNode; minRole: string }[] = [
     { key: 'meta', label: 'Metas', icon: <Target size={18} />, minRole: 'admin' },
@@ -152,6 +168,7 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
     { key: 'store', label: 'Loja', icon: <Store size={18} />, minRole: 'admin' },
     { key: 'bonuses', label: 'Bônus', icon: <Star size={18} />, minRole: 'admin' },
     { key: 'redemptions', label: 'Resgates', icon: <Package size={18} />, minRole: 'admin' },
+    { key: 'users', label: 'Usuários', icon: <Users size={18} />, minRole: 'admin' },
     { key: 'prize', label: 'Prêmio Mensal', icon: <Gift size={18} />, minRole: 'admin' },
   ];
 
@@ -217,6 +234,57 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
           {msg && <div className="admin-msg">{msg}</div>}
 
           <div className="admin-content-area">
+
+          {/* USERS TAB (Admin only) */}
+          {tab === 'users' && role === 'admin' && (
+            <div>
+              <h3 className="admin-section-title">Adicionar Novo Membro</h3>
+              <div className="admin-form">
+                <div className="form-row">
+                  <div className="afield"><label>Nome Completo</label><input value={userForm.name} onChange={e => setUserForm(f => ({ ...f, name: e.target.value }))} /></div>
+                  <div className="afield"><label>Nome de Usuário</label><input value={userForm.username} onChange={e => setUserForm(f => ({ ...f, username: e.target.value }))} /></div>
+                </div>
+                <div className="form-row">
+                  <div className="afield"><label>E-mail</label><input type="email" value={userForm.email} onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))} /></div>
+                  <div className="afield"><label>Senha Inicial</label><input type="password" value={userForm.password} onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))} /></div>
+                </div>
+                <div className="afield">
+                  <label>Nível de Acesso Inicial</label>
+                  <select value={userForm.role} onChange={e => setUserForm(f => ({ ...f, role: e.target.value }))}>
+                    <option value="member">Membro (Padrão)</option>
+                    <option value="organizador">Organizador (Lançar Pontos)</option>
+                    <option value="admin">Administrador (Total)</option>
+                  </select>
+                </div>
+                <button className="btn-admin-action" onClick={submitUser}>Criar Usuário</button>
+              </div>
+
+              <h3 className="admin-section-title" style={{ marginTop: '2rem' }}>Usuários Cadastrados / Permissões</h3>
+              <table className="admin-table">
+                <thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Permissão</th></tr></thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id}>
+                      <td style={{ fontWeight: 600 }}>{u.name}</td>
+                      <td>@{u.username}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>{u.email || '—'}</td>
+                      <td>
+                        <select 
+                          value={u.role || 'member'} 
+                          onChange={(e) => updateUserRole(u.id, e.target.value)}
+                          style={{ padding: '6px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem', outline: 'none', cursor: 'pointer' }}
+                        >
+                          <option value="member">Membro</option>
+                          <option value="organizador">Organizador</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* META TAB (Admin only) */}
           {tab === 'meta' && role === 'admin' && (
