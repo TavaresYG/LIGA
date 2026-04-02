@@ -99,7 +99,7 @@ export interface FormData {
 
 export interface SavedDoc {
   id: string;
-  type: 'pre-kickoff';
+  type: 'pre-kickoff' | 'kickoff';
   clientName: string;
   date: string;
   implantador: string;

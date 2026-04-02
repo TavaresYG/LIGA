@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { 
+  Target, 
+  Edit3, 
+  Clock, 
+  Store, 
+  Star, 
+  Package, 
+  Gift, 
+  X,
+  ChevronRight,
+  Settings,
+  LayoutDashboard
+} from 'lucide-react';
 import '../styles/admin.css';
 
 const API_URL = 'http://localhost:5000/api';
@@ -132,14 +145,14 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
   };
 
   // Filter tabs based on role
-  const allTabs: { key: AdminTab; label: string; minRole: string }[] = [
-    { key: 'meta', label: '🎯 Configurar Metas', minRole: 'admin' },
-    { key: 'registry', label: '✍️ Lançar Pontos', minRole: 'organizador' }, // organizador or admin (handled below)
-    { key: 'pending', label: `⏳ Pendentes ${pendingTasks.length > 0 ? `(${pendingTasks.length})` : ''}`, minRole: 'admin' },
-    { key: 'store', label: '🛍️ Gerenciar Loja', minRole: 'admin' },
-    { key: 'bonuses', label: '⭐ Conceder Bônus', minRole: 'admin' },
-    { key: 'redemptions', label: '📦 Resgates', minRole: 'admin' },
-    { key: 'prize', label: '🎁 Prêmio Mensal', minRole: 'admin' },
+  const allTabs: { key: AdminTab; label: string; icon: React.ReactNode; minRole: string }[] = [
+    { key: 'meta', label: 'Metas', icon: <Target size={18} />, minRole: 'admin' },
+    { key: 'registry', label: 'Lançar Pontos', icon: <Edit3 size={18} />, minRole: 'organizador' },
+    { key: 'pending', label: 'Pendentes', icon: <Clock size={18} />, minRole: 'admin' },
+    { key: 'store', label: 'Loja', icon: <Store size={18} />, minRole: 'admin' },
+    { key: 'bonuses', label: 'Bônus', icon: <Star size={18} />, minRole: 'admin' },
+    { key: 'redemptions', label: 'Resgates', icon: <Package size={18} />, minRole: 'admin' },
+    { key: 'prize', label: 'Prêmio Mensal', icon: <Gift size={18} />, minRole: 'admin' },
   ];
 
   const visibleTabs = allTabs.filter(t => {
@@ -150,21 +163,60 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
 
   return (
     <div className="admin-overlay">
-      <div className="admin-panel">
-        <div className="admin-header">
-          <h2>{role === 'admin' ? '⚙️ Painel de Administrador' : '📝 Painel de Organizador'}</h2>
-          <button onClick={onClose} className="btn-close-admin">✕</button>
-        </div>
+      <div className="admin-container">
+        
+        {/* SIDEBAR */}
+        <aside className="admin-sidebar">
+          <div className="sidebar-header">
+            <div className="sidebar-logo">
+              <Settings className="logo-icon" size={24} />
+              <div>
+                <h1>LIGA Admin</h1>
+                <span>{role === 'admin' ? 'Administrador' : 'Organizador'}</span>
+              </div>
+            </div>
+          </div>
 
-        {msg && <div className="admin-msg">{msg}</div>}
+          <nav className="sidebar-nav">
+            {visibleTabs.map(t => (
+              <button 
+                key={t.key} 
+                className={`sidebar-item ${tab === t.key ? 'active' : ''}`} 
+                onClick={() => setTab(t.key)}
+              >
+                <span className="item-icon">{t.icon}</span>
+                <span className="item-label">{t.label}</span>
+                {t.key === 'pending' && pendingTasks.length > 0 && (
+                  <span className="item-badge">{pendingTasks.length}</span>
+                )}
+                {tab === t.key && <ChevronRight className="active-arrow" size={14} />}
+              </button>
+            ))}
+          </nav>
 
-        <div className="admin-tabs">
-          {visibleTabs.map(t => (
-            <button key={t.key} className={`admin-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
-          ))}
-        </div>
+          <div className="sidebar-footer">
+            <button onClick={onClose} className="btn-logout-sidebar">
+              <X size={18} />
+              Sair do Painel
+            </button>
+          </div>
+        </aside>
 
-        <div className="admin-content">
+        {/* MAIN CONTENT */}
+        <main className="admin-main">
+          <header className="main-header">
+            <div className="header-info">
+              <LayoutDashboard size={20} />
+              <h2>{allTabs.find(t => t.key === tab)?.label}</h2>
+            </div>
+            <button onClick={onClose} className="btn-close-mobile">
+              <X size={20} />
+            </button>
+          </header>
+
+          {msg && <div className="admin-msg">{msg}</div>}
+
+          <div className="admin-content-area">
 
           {/* META TAB (Admin only) */}
           {tab === 'meta' && role === 'admin' && (
@@ -323,7 +375,8 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
             </div>
           )}
 
-        </div>
+          </div>
+        </main>
       </div>
     </div>
   );
