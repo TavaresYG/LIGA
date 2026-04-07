@@ -96,6 +96,19 @@ export interface FormData {
   kickoff_date: string;
   kickoff_time: string;
   kickoff_format: string;
+  dinamica_implantacao: string;
+  comunicacao_oficial: string;
+  agendamentos_reunioes: string;
+  validacoes_andamento: string;
+  validacoes_pos_fluxo: string;
+  rotina_semanal: string;
+  rotina_envio_modo: string;
+  rotina_envio_emails: string;
+  rotina_envio_whatsapps: string;
+  rotina_envio_outro: string;
+  horario_setor: string;
+  base_padrao: string;
+  documentos_adicionais: Array<{ id: string, name: string, type: 'pdf' | 'image', url: string }>;
 }
 
 export interface SavedDoc {

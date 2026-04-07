@@ -58,6 +58,9 @@ const defaultData: FormData = {
   prazo_base: '',
   resp_dados: '',
   sponsor: '',
+  horario_setor: '',
+  base_padrao: '',
+  documentos_adicionais: [],
   aprovador: '',
   resp_teste: '',
   resp_treinamento: '',
@@ -73,6 +76,16 @@ const defaultData: FormData = {
   kickoff_date: '',
   kickoff_time: '',
   kickoff_format: '',
+  dinamica_implantacao: '',
+  comunicacao_oficial: '',
+  agendamentos_reunioes: '',
+  validacoes_andamento: '',
+  validacoes_pos_fluxo: '',
+  rotina_semanal: '',
+  rotina_envio_modo: '',
+  rotina_envio_emails: '',
+  rotina_envio_whatsapps: '',
+  rotina_envio_outro: '',
 };
 
 const DAYS = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];

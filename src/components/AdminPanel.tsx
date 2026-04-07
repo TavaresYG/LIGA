@@ -241,14 +241,10 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
             <div>
               <h3 className="admin-section-title">Adicionar Novo Membro</h3>
               <div className="admin-form">
-                <div className="form-row">
-                  <div className="afield"><label>Nome Completo</label><input value={userForm.name} onChange={e => setUserForm(f => ({ ...f, name: e.target.value }))} /></div>
-                  <div className="afield"><label>Nome de Usuário</label><input value={userForm.username} onChange={e => setUserForm(f => ({ ...f, username: e.target.value }))} /></div>
-                </div>
-                <div className="form-row">
-                  <div className="afield"><label>E-mail</label><input type="email" value={userForm.email} onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))} /></div>
-                  <div className="afield"><label>Senha Inicial</label><input type="password" value={userForm.password} onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))} /></div>
-                </div>
+                <div className="afield"><label>Nome Completo</label><input value={userForm.name} onChange={e => setUserForm(f => ({ ...f, name: e.target.value }))} /></div>
+                <div className="afield"><label>Nome de Usuário</label><input value={userForm.username} onChange={e => setUserForm(f => ({ ...f, username: e.target.value }))} /></div>
+                <div className="afield"><label>E-mail</label><input type="email" value={userForm.email} onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))} /></div>
+                <div className="afield"><label>Senha Inicial</label><input type="password" value={userForm.password} onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))} /></div>
                 <div className="afield">
                   <label>Nível de Acesso Inicial</label>
                   <select value={userForm.role} onChange={e => setUserForm(f => ({ ...f, role: e.target.value }))}>
