@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import '../styles/ranking.css';
 
-const API_URL = 'http://localhost:5000/api';
+import BASE_API_URL from '../api/config';
+const API_URL = `${BASE_API_URL}/api`;
 
 type Period = 'geral' | 'semanal' | 'mensal' | 'custom';
 

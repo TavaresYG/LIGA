@@ -94,6 +94,7 @@ export interface FormData {
   fora_padrao: string;
   pendencias: string;
   kickoff_date: string;
+  kickoff_time: string;
   kickoff_format: string;
 }
 

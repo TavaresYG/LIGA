@@ -3,7 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { Target, CheckCircle2, TrendingUp, Award } from 'lucide-react';
 import '../styles/goals.css';
 
-const API_URL = 'http://localhost:5000/api';
+import BASE_API_URL from '../api/config';
+const API_URL = `${BASE_API_URL}/api`;
 
 interface TaskType {
   id: string;

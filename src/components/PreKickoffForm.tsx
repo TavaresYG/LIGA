@@ -71,6 +71,7 @@ const defaultData: FormData = {
   fora_padrao: '',
   pendencias: '',
   kickoff_date: '',
+  kickoff_time: '',
   kickoff_format: '',
 };
 
@@ -500,7 +501,7 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
             <div className="doc-grid full">
               {renderCell('Processos Fora do Padrão', data.fora_padrao, true)}
               {renderCell('Pendências a Resolver', data.pendencias, true)}
-              {renderCell('Data do Kick-Off Oficial', fmtDate(data.kickoff_date))}
+              {renderCell('Data do Kick-Off Oficial', `${fmtDate(data.kickoff_date)}${data.kickoff_time ? ' às ' + data.kickoff_time : ''}`)}
               {renderCell('Formato do Kick-Off', data.kickoff_format)}
             </div>
           </div>
@@ -1141,8 +1142,11 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
             </div>
           </div>
           <div className="form-row">
-            <div className="field"><label>Data prevista para Kick-Off</label>
+            <div className="field" style={{ flex: '0 0 200px' }}><label>Data prevista para Kick-Off</label>
               <input id="f_kickoff_date" type="date" value={data.kickoff_date} onChange={handleChange} />
+            </div>
+            <div className="field" style={{ flex: '0 0 120px' }}><label>Hora</label>
+              <input id="f_kickoff_time" type="time" value={data.kickoff_time} onChange={handleChange} />
             </div>
             <div className="field"><label>Formato do Kick-Off</label>
               <select id="f_kickoff_format" value={data.kickoff_format} onChange={handleChange}>

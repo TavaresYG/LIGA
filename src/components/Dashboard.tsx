@@ -3,7 +3,8 @@ import { SavedDoc } from '../types';
 import { FileText, Plus, Search, Trash2, Printer } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = 'http://localhost:5000/api';
+import BASE_API_URL from '../api/config';
+const API_URL = `${BASE_API_URL}/api`;
 
 interface DashboardProps {
   onNewDoc: () => void;

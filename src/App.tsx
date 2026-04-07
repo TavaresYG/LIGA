@@ -15,7 +15,8 @@ import { Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag, Settings
 import './App.css'
 import './styles/goals.css'
 
-const API_URL = 'http://localhost:5000/api';
+import BASE_API_URL from './api/config';
+const API_URL = `${BASE_API_URL}/api`;
 
 type View = 'dashboard' | 'form' | 'ranking' | 'loja' | 'extrato' | 'kickoff' | 'goals';
 

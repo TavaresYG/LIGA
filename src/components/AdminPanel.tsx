@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 import '../styles/admin.css';
 
-const API_URL = 'http://localhost:5000/api';
+import BASE_API_URL from '../api/config';
+const API_URL = `${BASE_API_URL}/api`;
 
 type AdminTab = 'meta' | 'registry' | 'pending' | 'store' | 'bonuses' | 'redemptions' | 'prize' | 'users';
 
@@ -212,9 +213,9 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
           </nav>
 
           <div className="sidebar-footer">
-            <button onClick={onClose} className="btn-logout-sidebar">
-              <X size={18} />
-              Sair do Painel
+            <button onClick={onClose} className="btn-logout-sidebar" title="Sair do Painel">
+              <X size={20} />
+              <span className="btn-text">Sair do Painel</span>
             </button>
           </div>
         </aside>

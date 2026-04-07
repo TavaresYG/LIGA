@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import '../styles/statement.css';
 
-const API_URL = 'http://localhost:5000/api';
+import BASE_API_URL from '../api/config';
+const API_URL = `${BASE_API_URL}/api`;
 
 interface StatementEntry {
   id: string;
