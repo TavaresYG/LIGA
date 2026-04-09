@@ -161,6 +161,16 @@
   color: var(--text-muted);
 }
 
+.statement-status-pending {
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: #f59e0b;
+  color: white;
+  padding: 0.15rem 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
 .statement-notes {
   font-size: 0.72rem;
   color: var(--text-muted);

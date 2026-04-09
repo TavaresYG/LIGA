@@ -28,6 +28,7 @@ function AppContent() {
   const [userRole, setUserRole] = useState<string>('member');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [pendingPointsCount, setPendingPointsCount] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('liga_theme') as 'light' | 'dark') || 'light';
   });
@@ -49,6 +50,21 @@ function AppContent() {
       })
       .catch(() => {});
   }, [token, user]);
+
+  useEffect(() => {
+    if (!token) return;
+    const checkPending = () => {
+      fetch(`${API_URL}/me/task-completions/pending`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(d => {
+          if (Array.isArray(d)) setPendingPointsCount(d.length);
+        })
+        .catch(() => {});
+    };
+    checkPending();
+    const interval = setInterval(checkPending, 30000); // Check every 30s
+    return () => clearInterval(interval);
+  }, [token]);
 
   const canAccessAdmin = userRole === 'admin' || userRole === 'organizador';
 
@@ -180,7 +196,10 @@ function AppContent() {
               {activeDropdown === 'pontos' && (
                 <div className="dropdown-menu" onMouseLeave={() => setActiveDropdown(null)}>
                   <button onClick={() => handleNavClick('loja')}>🛍️ Loja de Prêmios</button>
-                  <button onClick={() => handleNavClick('extrato')}>📜 Meu Extrato</button>
+                  <button onClick={() => handleNavClick('extrato')}>
+                    📜 Meu Extrato 
+                    {pendingPointsCount > 0 && <span className="nav-pending-badge">!</span>}
+                  </button>
                 </div>
               )}
             </div>

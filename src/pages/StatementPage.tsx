@@ -12,6 +12,7 @@ interface StatementEntry {
   points: number;
   date: string;
   notes?: string;
+  status?: string;
 }
 
 const typeConfig = {
@@ -113,10 +114,13 @@ const StatementPage: React.FC = () => {
                 <div className="statement-info">
                   <span className="statement-desc">{entry.description}</span>
                   <div className="statement-meta">
-                    <span className="statement-type-badge" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
                     <span className="statement-date">
-                      {new Date(entry.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(entry.date || Date.now()).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
+                    <span className="statement-type-badge" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
+                    {entry.status === 'pending' && (
+                      <span className="statement-status-pending">⏳ PENDENTE</span>
+                    )}
                     {entry.notes && entry.type !== 'redemption' && (
                       <span className="statement-notes">📎 {entry.notes}</span>
                     )}

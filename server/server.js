@@ -14,6 +14,11 @@ app.use(express.json({ limit: '10mb' }));
 
 initDb();
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // --- Middlewares ---
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -383,6 +388,24 @@ app.post('/api/task-completions', authenticateToken, requireOrganizadorOrAdmin, 
   }
 });
 
+// Batch register task completions
+app.post('/api/task-completions/batch', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
+  const { userId, completions, notes } = req.body; // completions is [{ taskTypeId, points }]
+  try {
+    const results = [];
+    for (const comp of completions) {
+      const result = await pool.query(
+        'INSERT INTO task_completions (user_id, task_type_id, points_awarded, status, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [userId, comp.taskTypeId, comp.points, 'pending', notes || null]
+      );
+      results.push(result.rows[0]);
+    }
+    res.status(201).json(results);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao registrar tarefas em lote: ' + err.message });
+  }
+});
+
 // Get pending task completions (admin)
 app.get('/api/task-completions/pending', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -396,6 +419,21 @@ app.get('/api/task-completions/pending', authenticateToken, requireAdmin, async 
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar pendências' });
+  }
+});
+
+// Get MY pending task completions
+app.get('/api/me/task-completions/pending', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT tc.*, tt.name AS task_name
+      FROM task_completions tc
+      LEFT JOIN task_types tt ON tt.id = tc.task_type_id
+      WHERE tc.user_id = $1 AND tc.status = 'pending' ORDER BY tc.created_at DESC
+    `, [req.user.id]);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar suas pendências' });
   }
 });
 
@@ -619,10 +657,11 @@ app.get('/api/me/statement', authenticateToken, async (req, res) => {
         tt.name AS description,
         tc.points_awarded AS points,
         tc.approved_at AS date,
-        tc.notes
+        tc.notes,
+        tc.status
       FROM task_completions tc
       LEFT JOIN task_types tt ON tt.id = tc.task_type_id
-      WHERE tc.user_id = $1 AND tc.status = 'approved'
+      WHERE tc.user_id = $1 AND (tc.status = 'approved' OR tc.status = 'pending')
     `, [userId]);
 
     // Bonuses (earn points)
@@ -633,7 +672,8 @@ app.get('/api/me/statement', authenticateToken, async (req, res) => {
         COALESCE('Bônus: ' || b.reason, 'Bônus de Equipe') AS description,
         b.points AS points,
         b.created_at AS date,
-        b.reason AS notes
+        b.reason AS notes,
+        'approved' AS status
       FROM bonuses b
       WHERE b.user_id = $1
     `, [userId]);
@@ -646,7 +686,8 @@ app.get('/api/me/statement', authenticateToken, async (req, res) => {
         'Resgate: ' || r.item_name AS description,
         -r.points_spent AS points,
         r.created_at AS date,
-        r.status AS notes
+        r.status AS notes,
+        r.status
       FROM redemptions r
       WHERE r.user_id = $1 AND r.status != 'cancelled'
     `, [userId]);

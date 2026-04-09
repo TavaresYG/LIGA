@@ -30,7 +30,7 @@
 
 /* SIDEBAR */
 .admin-sidebar {
-  background: #1e293b;
+  background: var(--accent); /* Same green tone as the rest of the system */
   border-right: 1px solid rgba(255,255,255,0.05);
   display: flex;
   flex-direction: column;
@@ -38,6 +38,10 @@
   height: 100%;
   position: relative;
   overflow: hidden;
+}
+
+[data-theme='dark'] .admin-sidebar {
+  background: #0f172a; /* Back to dark slate in Dark Mode */
 }
 
 .sidebar-header {
@@ -53,7 +57,7 @@
 }
 
 .logo-icon {
-  color: var(--accent);
+  color: white;
 }
 
 .sidebar-logo h1 {
@@ -65,7 +69,7 @@
 
 .sidebar-logo span {
   font-size: 0.7rem;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.8);
   text-transform: uppercase;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -89,7 +93,7 @@
   border-radius: 0.85rem;
   border: none;
   background: transparent;
-  color: #94a3b8;
+  color: white;
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
@@ -103,8 +107,9 @@
 }
 
 .sidebar-item.active {
-  background: rgba(34, 197, 94, 0.1);
-  color: var(--accent);
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-weight: 800;
 }
 
 .item-badge {
@@ -136,11 +141,11 @@
   gap: 12px;
   width: 100%;
   padding: 0.85rem 1.15rem;
-  background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
+  background: #ef4444;
+  color: white;
   border: none;
   border-radius: 0.85rem;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 0.9rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -150,8 +155,8 @@
 }
 
 .btn-logout-sidebar:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ff9999;
+  background: #dc2626;
+  transform: translateY(-1px);
 }
 
 /* MAIN CONTENT */
@@ -242,11 +247,11 @@
 
 .admin-section-title {
   font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-heading);
+  font-weight: 800;
+  color: var(--accent);
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 2px solid var(--accent-light);
 }
 
 .admin-form {
@@ -312,6 +317,17 @@
 }
 
 .btn-admin-action:hover { background: var(--accent-hover); transform: translateY(-1px); }
+
+.admin-msg {
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 1rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  font-weight: 700;
+  border: 1px solid var(--accent);
+  animation: fadeIn 0.3s ease;
+}
 
 .admin-table {
   width: 100%;
