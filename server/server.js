@@ -705,6 +705,94 @@ app.get('/api/me/statement', authenticateToken, async (req, res) => {
   }
 });
 
+// ===================== PROJECTS =====================
+
+// ===================== CLIENTS =====================
+
+// Get all unique client names from clients table and documents
+app.get('/api/clients', authenticateToken, async (req, res) => {
+  try {
+    const clientsResult = await pool.query('SELECT name FROM clients');
+    const docsResult = await pool.query('SELECT DISTINCT client_name FROM documents');
+    
+    const combined = new Set([
+      ...clientsResult.rows.map(r => r.name),
+      ...docsResult.rows.map(r => r.client_name).filter(Boolean)
+    ]);
+    
+    res.json(Array.from(combined).sort());
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar clientes: ' + err.message });
+  }
+});
+
+// Get all projects
+app.get('/api/projects', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM projects ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar projetos: ' + err.message });
+  }
+});
+
+// Create a project
+app.post('/api/projects', authenticateToken, async (req, res) => {
+  const { priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee } = req.body;
+  
+  try {
+    // Ensure client exists in clients table
+    if (client_name) {
+      await pool.query('INSERT INTO clients (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [client_name]);
+    }
+
+    const result = await pool.query(
+      `INSERT INTO projects (priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [priority || 'Média', name, client_name, progress || 0, status || 'Em andamento', is_live || false, solution_hired, analyst, whatsapp_group, monthly_fee || 0]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao criar projeto: ' + err.message });
+  }
+});
+
+// Update a project
+app.put('/api/projects/:id', authenticateToken, async (req, res) => {
+  const { priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee } = req.body;
+  const { id } = req.params;
+  
+  try {
+    // Ensure client exists in clients table
+    if (client_name) {
+      await pool.query('INSERT INTO clients (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [client_name]);
+    }
+
+    const result = await pool.query(
+      `UPDATE projects SET 
+       priority = $1, name = $2, client_name = $3, progress = $4, status = $5, is_live = $6, 
+       solution_hired = $7, analyst = $8, whatsapp_group = $9, monthly_fee = $10, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $11 RETURNING *`,
+      [priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Projeto não encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar projeto: ' + err.message });
+  }
+});
+
+// Delete a project
+app.delete('/api/projects/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM projects WHERE id = $1 RETURNING *', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Projeto não encontrado' });
+    res.json({ message: 'Projeto excluído com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao deletar projeto: ' + err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });

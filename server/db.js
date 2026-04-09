@@ -146,6 +146,34 @@ const initDb = async () => {
       );
     `);
 
+    // 10. Clients Registry
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS clients (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL UNIQUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 11. Projects Panel — active projects monitor
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        priority VARCHAR(50) DEFAULT 'Média',
+        name VARCHAR(255) NOT NULL,
+        client_name VARCHAR(255),
+        progress INT DEFAULT 0,
+        status VARCHAR(100) DEFAULT 'Em andamento',
+        is_live BOOLEAN DEFAULT FALSE,
+        solution_hired VARCHAR(255),
+        analyst VARCHAR(255),
+        whatsapp_group TEXT,
+        monthly_fee NUMERIC(10, 2) DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log('✅ Banco de dados inicializado com sucesso (tabelas de gamificação incluídas).');
   } catch (err) {
     console.error('❌ Erro ao inicializar o banco de dados:', err.message);

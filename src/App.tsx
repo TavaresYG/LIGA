@@ -9,16 +9,17 @@ import RankingPage from './pages/RankingPage'
 import StorePage from './pages/StorePage'
 import StatementPage from './pages/StatementPage'
 import GoalsPage from './pages/GoalsPage'
+import ProjectsPanel from './pages/ProjectsPanel'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SavedDoc, FormData } from './types'
-import { Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag, Settings, Receipt, ChevronDown, FileText, Target, Award } from 'lucide-react'
+import { Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag, Settings, Receipt, ChevronDown, FileText, Target, Award, Briefcase } from 'lucide-react'
 import './App.css'
 import './styles/goals.css'
 
 import BASE_API_URL from './api/config';
 const API_URL = `${BASE_API_URL}/api`;
 
-type View = 'dashboard' | 'form' | 'ranking' | 'loja' | 'extrato' | 'kickoff' | 'goals';
+type View = 'dashboard' | 'form' | 'ranking' | 'loja' | 'extrato' | 'kickoff' | 'goals' | 'projects';
 
 function AppContent() {
   const { user, logout, loading, token } = useAuth();
@@ -144,6 +145,24 @@ function AppContent() {
               <span>Dashboard</span>
             </button>
 
+            {/* PAINEL DROPDOWN */}
+            <div className="nav-dropdown">
+              <button 
+                className={`nav-btn ${view === 'projects' ? 'active' : ''}`}
+                onMouseEnter={() => setActiveDropdown('painel')}
+                onClick={() => setActiveDropdown(activeDropdown === 'painel' ? null : 'painel')}
+              >
+                <Briefcase size={18} />
+                <span>Painel</span>
+                <ChevronDown size={14} className={activeDropdown === 'painel' ? 'rotated' : ''} />
+              </button>
+              {activeDropdown === 'painel' && (
+                <div className="dropdown-menu" onMouseLeave={() => setActiveDropdown(null)}>
+                  <button onClick={() => handleNavClick('projects')}>📊 Painel dos projetos</button>
+                </div>
+              )}
+            </div>
+
             {/* DOCUMENTOS DROPDOWN */}
             <div className="nav-dropdown">
               <button 
@@ -255,6 +274,7 @@ function AppContent() {
         {view === 'loja' && <StorePage />}
         {view === 'extrato' && <StatementPage />}
         {view === 'goals' && <GoalsPage />}
+        {view === 'projects' && <ProjectsPanel />}
       </main>
 
       {showAdmin && <AdminPanel role={userRole} onClose={() => setShowAdmin(false)} />}
