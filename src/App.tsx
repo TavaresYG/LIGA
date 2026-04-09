@@ -10,6 +10,7 @@ import StorePage from './pages/StorePage'
 import StatementPage from './pages/StatementPage'
 import GoalsPage from './pages/GoalsPage'
 import ProjectsPanel from './pages/ProjectsPanel'
+import PortfoliosPanel from './pages/PortfoliosPanel'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SavedDoc, FormData } from './types'
 import { Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag, Settings, Receipt, ChevronDown, FileText, Target, Award, Briefcase } from 'lucide-react'
@@ -19,7 +20,7 @@ import './styles/goals.css'
 import BASE_API_URL from './api/config';
 const API_URL = `${BASE_API_URL}/api`;
 
-type View = 'dashboard' | 'form' | 'ranking' | 'loja' | 'extrato' | 'kickoff' | 'goals' | 'projects';
+type View = 'dashboard' | 'form' | 'ranking' | 'loja' | 'extrato' | 'kickoff' | 'goals' | 'projects' | 'portfolios';
 
 function AppContent() {
   const { user, logout, loading, token } = useAuth();
@@ -159,6 +160,7 @@ function AppContent() {
               {activeDropdown === 'painel' && (
                 <div className="dropdown-menu" onMouseLeave={() => setActiveDropdown(null)}>
                   <button onClick={() => handleNavClick('projects')}>📊 Painel dos projetos</button>
+                  <button onClick={() => handleNavClick('portfolios')}>💼 Painel de portfólios</button>
                 </div>
               )}
             </div>
@@ -275,6 +277,7 @@ function AppContent() {
         {view === 'extrato' && <StatementPage />}
         {view === 'goals' && <GoalsPage />}
         {view === 'projects' && <ProjectsPanel />}
+        {view === 'portfolios' && <PortfoliosPanel />}
       </main>
 
       {showAdmin && <AdminPanel role={userRole} onClose={() => setShowAdmin(false)} />}

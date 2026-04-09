@@ -1,0 +1,519 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { 
+  Building2, 
+  Plus, 
+  Users, 
+  Edit2,
+  Trash2,
+  X,
+  FileText,
+  Activity,
+  Eye,
+  RefreshCw,
+  Upload,
+  Download,
+  Loader2
+} from 'lucide-react';
+import '../styles/projects.css';
+
+import BASE_API_URL from '../api/config';
+const API_URL = `${BASE_API_URL}/api`;
+
+interface Portfolio {
+  id: string;
+  name: string;
+  owner: string;
+  description: string;
+  created_at: string;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  client_name: string;
+  progress: number;
+  status: string;
+  priority: string;
+}
+
+const PortfoliosPanel: React.FC = () => {
+  const { token } = useAuth();
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPortfolio, setEditingPortfolio] = useState<Portfolio | null>(null);
+  
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [viewingPortfolio, setViewingPortfolio] = useState<Portfolio | null>(null);
+
+  const [isSyncingAsana, setIsSyncingAsana] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const initialFormState = {
+    name: '',
+    owner: '',
+    description: ''
+  };
+
+  const [formData, setFormData] = useState<any>(initialFormState);
+
+  const fetchData = async () => {
+    try {
+      const [resPort, resProj] = await Promise.all([
+        fetch(`${API_URL}/portfolios`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/projects`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      
+      if (resPort.ok) setPortfolios(await resPort.json());
+      if (resProj.ok) setProjects(await resProj.json());
+    } catch (err) {
+      console.error('Failed to fetch data', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (token) fetchData();
+  }, [token]);
+
+  const handleOpenModal = (portfolio?: Portfolio) => {
+    if (portfolio) {
+      setEditingPortfolio(portfolio);
+      setFormData(portfolio);
+    } else {
+      setEditingPortfolio(null);
+      setFormData(initialFormState);
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingPortfolio(null);
+    setFormData(initialFormState);
+  };
+
+  const handleViewDetails = (portfolio: Portfolio) => {
+    setViewingPortfolio(portfolio);
+    setIsDetailsOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const method = editingPortfolio ? 'PUT' : 'POST';
+      const url = editingPortfolio ? `${API_URL}/portfolios/${editingPortfolio.id}` : `${API_URL}/portfolios`;
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (res.ok) {
+        fetchData();
+        handleCloseModal();
+      } else {
+        alert('Erro ao salvar portfólio');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro inesperado');
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    const linkedProjects = projects.filter(p => p.client_name === name);
+    if (linkedProjects.length > 0) {
+      alert(`Ação bloqueada: Este cliente possui ${linkedProjects.length} projeto(s) vinculado(s). Você deve excluir os projetos primeiro.`);
+      return;
+    }
+
+    if (!window.confirm('Tem certeza que deseja excluir este portfólio?')) return;
+    try {
+      const res = await fetch(`${API_URL}/portfolios/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setPortfolios(prev => prev.filter(p => p.id !== id));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    const hasProjects = portfolios.some(c => projects.filter(p => p.client_name === c.name).length > 0);
+    if (hasProjects) {
+      alert('Ação bloqueada: Exclua (ou desvincule) todos os projetos antes de excluir todos os clientes.');
+      return;
+    }
+
+    if (!window.confirm('CUIDADO: Tem certeza que deseja excluir TODOS os clientes (portfólios) de uma vez?')) return;
+    try {
+      const res = await fetch(`${API_URL}/portfolios-all`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setPortfolios([]);
+        alert('Todos os clientes foram excluídos com sucesso!');
+      } else {
+         alert('Erro ao excluir clientes.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSyncAsana = async () => {
+    const asanaToken = localStorage.getItem('asana_token');
+    const workspaceId = localStorage.getItem('asana_workspace');
+
+    if (!asanaToken) {
+      alert('Token do Asana não configurado. Vá no menu de Administrador > Integrações.');
+      return;
+    }
+
+    setIsSyncingAsana(true);
+    try {
+      const portfoliosUrl = workspaceId 
+        ? `https://app.asana.com/api/1.0/portfolios?workspace=${workspaceId}&owner=me&opt_fields=name,notes,created_at,owner.name`
+        : `https://app.asana.com/api/1.0/portfolios?owner=me&opt_fields=name,notes,created_at,owner.name`;
+
+      const response = await fetch(portfoliosUrl, {
+        headers: { 'Authorization': `Bearer ${asanaToken}` }
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha ao autenticar com Asana.');
+      }
+
+      const { data: asanaPortfolios } = await response.json();
+      let importedCount = 0;
+
+      for (const ap of asanaPortfolios) {
+         const newPortfolio = {
+            name: ap.name,
+            owner: ap.owner?.name || 'Asana Import',
+            description: ap.notes || 'Importado do Asana'
+         };
+
+         const res = await fetch(`${API_URL}/portfolios`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify(newPortfolio)
+         });
+         if (res.ok) importedCount++;
+      }
+
+      if (importedCount > 0) {
+        alert(`${importedCount} portfólios importados e/ou atualizados do Asana!`);
+        fetchData();
+      } else {
+        alert('Nenhum portfólio novo encontrado no Asana.');
+      }
+    } catch (error: any) {
+      console.error(error);
+      alert('Erro ao tentar importar do Asana.');
+    } finally {
+      setIsSyncingAsana(false);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = ['nome', 'proprietario', 'descricao'];
+    const exampleRow = ['Empresa Exemplo LTDA', 'João da Silva', 'Cliente do setor de tecnologia'];
+    const csvContent = [headers.join(';'), exampleRow.join(';')].join('\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'modelo_importacao_clientes.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        // Fix for multiple OS line endings \r\n vs \n
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (lines.length <= 1) {
+          alert('O arquivo está vazio ou não possui dados válidos.');
+          return;
+        }
+
+        let importedCount = 0;
+        // Detect Separator based on header row
+        const separator = lines[0].includes(';') ? ';' : ',';
+
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(separator);
+          if (cols.length >= 1 && cols[0].trim()) {
+            const newPortfolio = {
+               name: cols[0]?.trim() || '',
+               owner: cols[1]?.trim() || '',
+               description: cols[2]?.trim() || ''
+            };
+            const res = await fetch(`${API_URL}/portfolios`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify(newPortfolio)
+            });
+            if (res.ok) importedCount++;
+          }
+        }
+
+        if (importedCount > 0) {
+          alert(`${importedCount} cliente(s) importado(s) com sucesso!`);
+          fetchData();
+        } else {
+          alert('Nenhum dado válido para importação.');
+        }
+      } catch (err) {
+        alert('Erro ao processar arquivo CSV.');
+      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const totalClients = portfolios.length;
+  const totalProjectsLink = projects.filter(p => portfolios.some(c => c.name === p.client_name)).length;
+
+  if (loading) return <div style={{ padding: '2rem' }}>Carregando painel de portfólios...</div>;
+
+  return (
+    <div className="projects-page fade-in">
+      
+      <div className="projects-header" style={{ alignItems: 'flex-start' }}>
+        <div>
+          <div className="projects-title">
+            <Building2 size={28} color="var(--accent)" />
+            Painel de Portfólios
+          </div>
+          <p className="projects-subtitle">Gerencie e cadastre todos os seus clientes e centralize o vínculo com as implantações.</p>
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+             <button 
+               className="btn-add-project" 
+               style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
+               onClick={handleSyncAsana}
+               disabled={isSyncingAsana}
+             >
+               {isSyncingAsana ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} 
+               Asana
+             </button>
+             
+             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
+             <button 
+               className="btn-add-project" 
+               style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
+               onClick={() => fileInputRef.current?.click()}
+             >
+               <Upload size={16} /> Importar Planilha
+             </button>
+
+             <button 
+               className="btn-add-project" 
+               style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
+               onClick={handleDownloadTemplate}
+             >
+               <Download size={16} /> Modelo XLS
+             </button>
+
+             <button className="btn-add-project" onClick={() => handleOpenModal()}>
+               <Plus size={18} /> Novo Portfólio
+             </button>
+          </div>
+          
+          <button onClick={handleDeleteAll} style={{ color: '#ef4444', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>
+            Excluir todos os portfólios
+          </button>
+        </div>
+      </div>
+
+      <div className="projects-metrics">
+        <div className="metric-card">
+          <div className="metric-icon"><Users /></div>
+          <div className="metric-info">
+            <h3>Total de Clientes/Portfólios</h3>
+            <p>{totalClients}</p>
+          </div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-icon"><Activity /></div>
+          <div className="metric-info">
+            <h3>Projetos Atrelados</h3>
+            <p>{totalProjectsLink}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="projects-grid">
+        {portfolios.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)' }}>Nenhum cliente registrado ainda.</p>
+        ) : (
+          portfolios.map(portfolio => {
+            const linkedProjects = projects.filter(p => p.client_name === portfolio.name);
+            const projectCount = linkedProjects.length;
+            
+            return (
+              <div key={portfolio.id} className="project-card" style={{ borderTop: '4px solid var(--accent)' }}>
+                <div className="project-header">
+                  <div>
+                    <div className="project-brand" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FileText size={12} /> {new Date(portfolio.created_at).toLocaleDateString()}
+                    </div>
+                    <h3 className="project-name">{portfolio.name}</h3>
+                  </div>
+                  <div className="project-actions">
+                    <button className="btn-edit" onClick={() => handleViewDetails(portfolio)} title="Ver Detalhes e Projetos"><Eye size={16} /></button>
+                    <button className="btn-edit" onClick={() => handleOpenModal(portfolio)} title="Editar"><Edit2 size={16} /></button>
+                    <button className="btn-del" onClick={() => handleDelete(portfolio.id, portfolio.name)} title="Excluir"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+
+                <div className="project-details" style={{ gridTemplateColumns: '1fr', marginTop: '1rem' }}>
+                  <div className="detail-item">
+                    <span className="detail-label">Nome do cliente</span>
+                    <span className="detail-value">{portfolio.name}</span>
+                  </div>
+
+                  <div className="detail-item">
+                    <span className="detail-label">Projetos vinculados</span>
+                    <span className="detail-value text-accent font-semibold flex items-center gap-1">
+                       <Activity size={14} /> {projectCount}
+                    </span>
+                  </div>
+
+                  <div className="detail-item">
+                    <span className="detail-label">Descrição</span>
+                    <span className="detail-value" style={{ whiteSpace: 'pre-wrap', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      {portfolio.description || 'Sem descrição cadastrada.'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* MODAL CADASTRAR / EDITAR */}
+      {isModalOpen && (
+        <div className="modal-overlay" onClick={handleCloseModal}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingPortfolio ? 'Editar Portfólio' : 'Registrar Novo Portfólio'}</h2>
+              <button className="btn-close" onClick={handleCloseModal}><X size={24} /></button>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body form-grid">
+                <div className="form-group full">
+                  <label>Nome do Cliente *</label>
+                  <input 
+                    required 
+                    type="text" 
+                    value={formData.name} 
+                    onChange={e => setFormData({...formData, name: e.target.value})} 
+                    placeholder="Ex: Supermercado XYZ..."
+                  />
+                </div>
+
+                <div className="form-group full">
+                  <label>Proprietário / Responsável</label>
+                  <input 
+                    type="text" 
+                    value={formData.owner} 
+                    onChange={e => setFormData({...formData, owner: e.target.value})} 
+                    placeholder="Ex: João da Silva"
+                  />
+                </div>
+
+                <div className="form-group full">
+                  <label>Descrição</label>
+                  <textarea 
+                    rows={4}
+                    value={formData.description || ''} 
+                    onChange={e => setFormData({...formData, description: e.target.value})} 
+                    placeholder="Detalhes ou observações sobre o cliente..."
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-page)', color: 'var(--text-main)', fontSize: '0.9rem', outline: 'none' }}
+                  />
+                </div>
+              </div>
+              
+              <div className="modal-footer">
+                <button type="button" className="btn-cancel" onClick={handleCloseModal}>Cancelar</button>
+                <button type="submit" className="btn-save">Salvar Portfólio</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DETALHES (EYE) */}
+      {isDetailsOpen && viewingPortfolio && (
+        <div className="modal-overlay" onClick={() => setIsDetailsOpen(false)}>
+           <div className="modal-content" style={{ maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                 <h2>{viewingPortfolio.name}</h2>
+                 <button className="btn-close" onClick={() => setIsDetailsOpen(false)}><X size={24} /></button>
+              </div>
+              <div className="modal-body">
+                 <div style={{ paddingBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+                    <p style={{ margin: '0 0 0.5rem 0' }}><strong>Responsável:</strong> {viewingPortfolio.owner || 'Não definido'}</p>
+                    <p style={{ margin: '0 0 0.5rem 0' }}><strong>Criado em:</strong> {new Date(viewingPortfolio.created_at).toLocaleDateString()}</p>
+                    <p style={{ margin: 0 }}><strong>Descrição:</strong> <span style={{ color: 'var(--text-muted)' }}>{viewingPortfolio.description || 'Sem descrição.'}</span></p>
+                 </div>
+                 
+                 <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--text-heading)' }}>Projetos Atrelados ao Portfólio</h3>
+                 {projects.filter(p => p.client_name === viewingPortfolio.name).length === 0 ? (
+                    <p style={{ color: 'var(--text-muted)' }}>Nenhum projeto encontrado.</p>
+                 ) : (
+                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                       {projects.filter(p => p.client_name === viewingPortfolio.name).map(p => (
+                          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'var(--bg-page)', borderRadius: '0.75rem', border: '1px solid var(--border-color)' }}>
+                             <span style={{ fontWeight: '500' }}>{p.name}</span>
+                             <div style={{ display: 'flex', gap: '1rem', fontSize: '0.85rem' }}>
+                               <span>{p.progress}% <span style={{ color: 'var(--text-muted)' }}>Progresso</span></span>
+                               <span style={{ color: p.status === 'Concluído' ? 'var(--accent)' : 'inherit' }}>{p.status}</span>
+                             </div>
+                          </div>
+                       ))}
+                    </div>
+                 )}
+              </div>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default PortfoliosPanel;

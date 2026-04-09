@@ -12,14 +12,17 @@ import {
   ChevronRight,
   Settings,
   LayoutDashboard,
-  Users
+  Users,
+  Link,
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 import '../styles/admin.css';
 
 import BASE_API_URL from '../api/config';
 const API_URL = `${BASE_API_URL}/api`;
 
-type AdminTab = 'meta' | 'registry' | 'pending' | 'store' | 'bonuses' | 'redemptions' | 'prize' | 'users';
+type AdminTab = 'meta' | 'registry' | 'pending' | 'store' | 'bonuses' | 'redemptions' | 'prize' | 'users' | 'integrations';
 
 interface User { id: string; name: string; username: string; email?: string; role?: string; }
 interface TaskType { id: string; name: string; points: number; tipo: string; validation_rule_name?: string; }
@@ -161,6 +164,56 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
     else { showMsg('❌ Erro ao atualizar permissão'); }
   };
 
+  // ---- Integrations Form (Admin Only) ----
+  const [asanaToken, setAsanaToken] = useState('');
+  const [workspaceId, setWorkspaceId] = useState('');
+  const [autoSync, setAutoSync] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+
+  useEffect(() => {
+    const savedToken = localStorage.getItem('asana_token');
+    const savedWorkspace = localStorage.getItem('asana_workspace');
+    const savedAutoSync = localStorage.getItem('asana_auto_sync') === 'true';
+    if (savedToken) setAsanaToken(savedToken);
+    if (savedWorkspace) setWorkspaceId(savedWorkspace);
+    setAutoSync(savedAutoSync);
+  }, []);
+
+  const handleSaveAsana = () => {
+    if (!asanaToken.trim()) { showMsg('❌ O token do Asana é obrigatório.'); return; }
+    localStorage.setItem('asana_token', asanaToken);
+    localStorage.setItem('asana_workspace', workspaceId);
+    localStorage.setItem('asana_auto_sync', String(autoSync));
+    showMsg('✅ Configurações do Asana salvas!');
+  };
+
+  const handleTestAsana = async () => {
+    if (!asanaToken.trim()) { showMsg('❌ Informe o token antes de testar.'); return; }
+    setIsTesting(true);
+    try {
+      const response = await fetch('https://app.asana.com/api/1.0/users/me', { headers: { 'Authorization': `Bearer ${asanaToken}` } });
+      if (response.ok) {
+         const data = await response.json();
+         showMsg(`✅ Conexão bem-sucedida! Olá, ${data.data?.name || 'usuário'}!`);
+      } else {
+         const errorData = await response.json();
+         showMsg(`❌ Falha na conexão: ${errorData.errors?.[0]?.message || 'Token inválido'}`);
+      }
+    } catch (error) {
+      showMsg('❌ Erro ao conectar com a API do Asana.');
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleClearAsana = () => {
+    localStorage.removeItem('asana_token');
+    localStorage.removeItem('asana_workspace');
+    localStorage.removeItem('asana_auto_sync');
+    setAsanaToken(''); setWorkspaceId(''); setAutoSync(false);
+    showMsg('✅ Credenciais removidas.');
+  };
+
   // Filter tabs based on role
   const allTabs: { key: AdminTab; label: string; icon: React.ReactNode; minRole: string }[] = [
     { key: 'meta', label: 'Metas', icon: <Target size={18} />, minRole: 'admin' },
@@ -171,6 +224,7 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
     { key: 'redemptions', label: 'Resgates', icon: <Package size={18} />, minRole: 'admin' },
     { key: 'users', label: 'Usuários', icon: <Users size={18} />, minRole: 'admin' },
     { key: 'prize', label: 'Prêmio Mensal', icon: <Gift size={18} />, minRole: 'admin' },
+    { key: 'integrations', label: 'Integrações', icon: <Link size={18} />, minRole: 'admin' },
   ];
 
   const visibleTabs = allTabs.filter(t => {
@@ -436,6 +490,66 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
                 <div className="afield"><label>Título</label><input value={prizeForm.title} onChange={e => setPrizeForm(f => ({ ...f, title: e.target.value }))} /></div>
                 <div className="afield"><label>Descrição</label><textarea value={prizeForm.description} onChange={e => setPrizeForm(f => ({ ...f, description: e.target.value }))} /></div>
                 <button className="btn-admin-action" onClick={submitPrize}>Salvar</button>
+              </div>
+            </div>
+          )}
+
+          {/* INTEGRATIONS TAB (Admin Only) */}
+          {tab === 'integrations' && role === 'admin' && (
+            <div>
+              <h3 className="admin-section-title">Integrações de Sistemas</h3>
+              <div style={{ display: 'grid', gap: '1.5rem' }}>
+                <div className="admin-form" style={{ borderLeft: '4px solid #fc6c7c', padding: '1.5rem', background: 'var(--bg-card)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div style={{ backgroundColor: '#fc6c7c', color: 'white', padding: '0.75rem', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '45px', height: '45px', fontSize: '1.25rem', fontWeight: 'bold' }}>A</div>
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-heading)' }}>Asana</h4>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Sincronize projetos e tarefas do board</p>
+                    </div>
+                  </div>
+
+                  <div className="afield">
+                    <label>Personal Access Token</label>
+                    <input type="password" placeholder="1/12300..." value={asanaToken} onChange={e => setAsanaToken(e.target.value)} />
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>Gere este token nas configurações de desenvolvedor do seu perfil físico no Asana.</span>
+                  </div>
+
+                  <div className="afield">
+                    <label>Workspace ID (Opcional)</label>
+                    <input placeholder="Ex: 1202622032463666" value={workspaceId} onChange={e => setWorkspaceId(e.target.value)} />
+                  </div>
+
+                  <div className="afield" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.75rem', background: 'var(--bg-hover)', padding: '1rem', borderRadius: '0.75rem' }}>
+                    <input 
+                      type="checkbox" 
+                      id="asana_auto_sync" 
+                      checked={autoSync} 
+                      onChange={e => setAutoSync(e.target.checked)} 
+                      style={{ width: '20px', height: '20px', accentColor: 'var(--accent)', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <label htmlFor="asana_auto_sync" style={{ cursor: 'pointer', margin: 0, fontSize: '0.95rem', color: 'var(--text-heading)' }}>Sincronização Automática</label>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Importar novos projetos e clientes (portfólios) ao abrir o app</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button 
+                      className="btn-admin-action" 
+                      style={{ background: 'var(--bg-hover)', color: 'var(--text-heading)', border: '1px solid var(--border-color)' }} 
+                      onClick={handleTestAsana} 
+                      disabled={isTesting}
+                    >
+                      {isTesting ? <Loader2 size={16} className="animate-spin" style={{ marginRight: '6px' }} /> : <CheckCircle2 size={16} style={{ marginRight: '6px' }} />}
+                      Testar Conexão
+                    </button>
+                    <button className="btn-admin-action" style={{ paddingLeft: '2rem', paddingRight: '2rem' }} onClick={handleSaveAsana}>Salvar Configuração</button>
+                    
+                    <button onClick={handleClearAsana} style={{ background: 'none', border: 'none', color: '#ef4444', fontWeight: 'bold', cursor: 'pointer', marginLeft: 'auto', textDecoration: 'underline' }}>Desconectar</button>
+                  </div>
+                </div>
+
+                {/* Additional integrations can be added below here */}
               </div>
             </div>
           )}
