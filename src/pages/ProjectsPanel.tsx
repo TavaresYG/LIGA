@@ -424,9 +424,9 @@ const ProjectsPanel: React.FC = () => {
           </div>
           <p className="projects-subtitle">Acompanhe em tempo real o andamento e a saúde das implantações e entregas ativas.</p>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <div className="search-bar" style={{ minWidth: '326px', flex: '1', margin: 0, height: '42px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div className="search-bar" style={{ width: '326px', flex: '0 0 326px', margin: 0, height: '42px' }}>
               <Search size={18} className="search-icon" />
               <input 
                 type="text" 
