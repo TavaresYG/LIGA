@@ -47,6 +47,9 @@ const ProjectsPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('Todos');
+  const [filterPriority, setFilterPriority] = useState('Todas');
+  const [filterLive, setFilterLive] = useState('Todos');
   const [isSyncingAsana, setIsSyncingAsana] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -369,9 +372,21 @@ const ProjectsPanel: React.FC = () => {
     }
   };
 
-  const activeProjects = projects.filter(p => p && p.status !== 'Concluído').length;
-  const liveProjects = projects.filter(p => p && p.is_live).length;
-  const avgProgress = projects.length ? (projects.reduce((acc, p) => acc + (p?.progress || 0), 0) / projects.length).toFixed(0) : 0;
+  const filteredProjects = projects.filter(p => {
+    const matchesSearch = (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
+                         (p.client_name || '').toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = filterStatus === 'Todos' || p.status === filterStatus;
+    const matchesPriority = filterPriority === 'Todas' || p.priority === filterPriority;
+    const matchesLive = filterLive === 'Todos' || 
+                       (filterLive === 'Sim' && p.is_live) || 
+                       (filterLive === 'Não' && !p.is_live);
+    
+    return matchesSearch && matchesStatus && matchesPriority && matchesLive;
+  });
+
+  const activeProjects = filteredProjects.filter(p => p && p.status !== 'Concluído').length;
+  const liveProjects = filteredProjects.filter(p => p && p.is_live).length;
+  const avgProgress = filteredProjects.length ? (filteredProjects.reduce((acc, p) => acc + (p?.progress || 0), 0) / filteredProjects.length).toFixed(0) : 0;
 
   if (loading) return <div style={{ padding: '2rem' }}>Carregando painel de projetos...</div>;
 
@@ -388,6 +403,17 @@ const ProjectsPanel: React.FC = () => {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div className="search-bar" style={{ minWidth: '200px', flex: '1', margin: 0, height: '42px' }}>
+              <Search size={18} className="search-icon" />
+              <input 
+                type="text" 
+                placeholder="Buscar projeto..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ height: '100%' }}
+              />
+            </div>
+
             <button 
               className="btn-add-project" 
               style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
@@ -414,6 +440,7 @@ const ProjectsPanel: React.FC = () => {
             >
               <Download size={16} /> Modelo XLS
             </button>
+
 
             <button className="btn-add-project" onClick={() => handleOpenModal()}>
               <Plus size={18} /> Novo Projeto
@@ -450,15 +477,44 @@ const ProjectsPanel: React.FC = () => {
         </div>
       </div>
 
-      <div className="filter-row">
-        <div className="search-bar">
-          <Search size={18} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Buscar por nome do projeto ou cliente..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="filter-row" style={{ flexWrap: 'wrap', gap: '1rem', justifyContent: 'flex-end' }}>
+        <div className="filters-group" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <select 
+            className="filter-select" 
+            value={filterStatus} 
+            onChange={(e) => setFilterStatus(e.target.value)}
+            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+          >
+            <option value="Todos">Todos Status</option>
+            <option value="Na fila">Na fila</option>
+            <option value="Em andamento">Em andamento</option>
+            <option value="Atrasado">Atrasado</option>
+            <option value="Pausado">Pausado</option>
+            <option value="Concluído">Concluído</option>
+          </select>
+
+          <select 
+            className="filter-select" 
+            value={filterPriority} 
+            onChange={(e) => setFilterPriority(e.target.value)}
+            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+          >
+            <option value="Todas">Todas Prioridades</option>
+            <option value="Alta">Alta</option>
+            <option value="Média">Média</option>
+            <option value="Baixa">Baixa</option>
+          </select>
+
+          <select 
+            className="filter-select" 
+            value={filterLive} 
+            onChange={(e) => setFilterLive(e.target.value)}
+            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+          >
+            <option value="Todos">Todos (Virados ou não)</option>
+            <option value="Sim">Apenas Virados</option>
+            <option value="Não">Não Virados</option>
+          </select>
         </div>
 
         <div className="view-toggle">
@@ -481,16 +537,10 @@ const ProjectsPanel: React.FC = () => {
 
       {viewMode === 'grid' ? (
         <div className="projects-grid">
-          {projects.filter(p => 
-            (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
-            (p.client_name || '').toLowerCase().includes(search.toLowerCase())
-          ).length === 0 ? (
+          {filteredProjects.length === 0 ? (
             <p style={{ color: 'var(--text-muted)' }}>Nenhum projeto encontrado.</p>
           ) : (
-            projects.filter(p => 
-              (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
-              (p.client_name || '').toLowerCase().includes(search.toLowerCase())
-            ).map(project => (
+            filteredProjects.map(project => (
               <div key={project.id} className={`project-card priority-${(project.priority || 'Média').toLowerCase()}`}>
                 
                 <div className="project-header">
@@ -585,20 +635,14 @@ const ProjectsPanel: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {projects.filter(p => 
-                (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
-                (p.client_name || '').toLowerCase().includes(search.toLowerCase())
-              ).length === 0 ? (
+              {filteredProjects.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
                     Nenhum projeto encontrado.
                   </td>
                 </tr>
               ) : (
-                projects.filter(p => 
-                  (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
-                  (p.client_name || '').toLowerCase().includes(search.toLowerCase())
-                ).map(project => (
+                filteredProjects.map(project => (
                   <tr key={project.id}>
                     <td>
                        <div style={{ display: 'flex', flexDirection: 'column' }}>

@@ -343,6 +343,17 @@ const PortfoliosPanel: React.FC = () => {
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+             <div className="search-bar" style={{ minWidth: '200px', flex: '1', margin: 0, height: '42px' }}>
+               <Search size={18} className="search-icon" />
+               <input 
+                 type="text" 
+                 placeholder="Buscar cliente..." 
+                 value={search}
+                 onChange={(e) => setSearch(e.target.value)}
+                 style={{ height: '100%' }}
+               />
+             </div>
+
              <button 
                className="btn-add-project" 
                style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
@@ -398,16 +409,7 @@ const PortfoliosPanel: React.FC = () => {
         </div>
       </div>
 
-      <div className="filter-row">
-        <div className="search-bar">
-          <Search size={18} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Buscar por nome do cliente ou descrição..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+      <div className="filter-row" style={{ justifyContent: 'flex-end' }}>
 
         <div className="view-toggle">
           <button 
