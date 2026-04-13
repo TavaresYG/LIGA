@@ -50,6 +50,10 @@ const ProjectsPanel: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [filterPriority, setFilterPriority] = useState('Todas');
   const [filterLive, setFilterLive] = useState('Todos');
+  const [filterAnalyst, setFilterAnalyst] = useState('Todos');
+  const [filterSolution, setFilterSolution] = useState('Todas');
+  const [filterWhatsapp, setFilterWhatsapp] = useState('Todos');
+  const [filterMonthly, setFilterMonthly] = useState('Todos');
   const [isSyncingAsana, setIsSyncingAsana] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -108,8 +112,8 @@ const ProjectsPanel: React.FC = () => {
     try {
       // 1. Fetch Projects from Asana
       const projectsUrl = workspaceId 
-        ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete`
-        : `https://app.asana.com/api/1.0/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete`;
+        ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete,custom_fields`
+        : `https://app.asana.com/api/1.0/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete,custom_fields`;
 
       const response = await fetch(projectsUrl, {
         headers: { 'Authorization': `Bearer ${asanaToken}` }
@@ -157,19 +161,27 @@ const ProjectsPanel: React.FC = () => {
 
       alert(`Encontrei ${asanaProjects.length} projetos no Asana. Sincronizando com o banco local...`);
 
+      const getCustomFieldValue = (fields: any[], name: string) => {
+        const field = fields?.find(f => f.name.toLowerCase() === name.toLowerCase());
+        return field?.display_value || field?.text_value || field?.number_value || null;
+      };
+
       let importedCount = 0;
       for (const ap of asanaProjects) {
+        const customFields = ap.custom_fields || [];
+        
         const newProject = {
-          priority: 'Média', // Default
+          priority: getCustomFieldValue(customFields, 'Prioridade Projeto') || '---',
           name: ap.name,
-          client_name: projectToClientName[ap.gid] || '', 
+          client_name: projectToClientName[ap.gid] || '---', 
           progress: ap.percentage_complete || 0,
-          status: ap.current_status?.text || 'Em andamento',
-          is_live: false,
-          solution_hired: 'Importado do Asana',
-          analyst: ap.owner?.name || '',
-          whatsapp_group: '',
-          monthly_fee: 0
+          status: getCustomFieldValue(customFields, 'Status Projeto') || ap.current_status?.text || '---',
+          is_live: (getCustomFieldValue(customFields, 'Status Projeto') || '').toLowerCase().includes('live') || 
+                   (getCustomFieldValue(customFields, 'Status Projeto') || '').toLowerCase().includes('produção'),
+          solution_hired: getCustomFieldValue(customFields, 'Solução Contratada') || '---',
+          analyst: getCustomFieldValue(customFields, 'Analista Responsável') || ap.owner?.name || '---',
+          whatsapp_group: getCustomFieldValue(customFields, 'Grupo WhatsApp') || '---',
+          monthly_fee: Number(getCustomFieldValue(customFields, 'Mensalidade')) || 0
         };
 
         const res = await fetch(`${API_URL}/projects`, {
@@ -377,12 +389,23 @@ const ProjectsPanel: React.FC = () => {
                          (p.client_name || '').toLowerCase().includes(search.toLowerCase());
     const matchesStatus = filterStatus === 'Todos' || p.status === filterStatus;
     const matchesPriority = filterPriority === 'Todas' || p.priority === filterPriority;
+    const matchesAnalyst = filterAnalyst === 'Todos' || p.analyst === filterAnalyst;
+    const matchesSolution = filterSolution === 'Todas' || p.solution_hired === filterSolution;
+    const matchesWhatsapp = filterWhatsapp === 'Todos' || 
+                           (filterWhatsapp === 'Com Grupo' && p.whatsapp_group && p.whatsapp_group !== '---') || 
+                           (filterWhatsapp === 'Sem Grupo' && (!p.whatsapp_group || p.whatsapp_group === '---'));
+    const matchesMonthly = filterMonthly === 'Todos' || 
+                          (filterMonthly === 'Com Mensalidade' && Number(p.monthly_fee) > 0) || 
+                          (filterMonthly === 'Sem Mensalidade' && (!p.monthly_fee || Number(p.monthly_fee) === 0));
     const matchesLive = filterLive === 'Todos' || 
                        (filterLive === 'Sim' && p.is_live) || 
                        (filterLive === 'Não' && !p.is_live);
     
-    return matchesSearch && matchesStatus && matchesPriority && matchesLive;
+    return matchesSearch && matchesStatus && matchesPriority && matchesAnalyst && matchesSolution && matchesWhatsapp && matchesMonthly && matchesLive;
   });
+
+  const analysts = Array.from(new Set(projects.map(p => p.analyst).filter(Boolean))).sort();
+  const solutions = Array.from(new Set(projects.map(p => p.solution_hired).filter(Boolean))).sort();
 
   const activeProjects = filteredProjects.filter(p => p && p.status !== 'Concluído').length;
   const liveProjects = filteredProjects.filter(p => p && p.is_live).length;
@@ -403,7 +426,7 @@ const ProjectsPanel: React.FC = () => {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <div className="search-bar" style={{ minWidth: '200px', flex: '1', margin: 0, height: '42px' }}>
+            <div className="search-bar" style={{ minWidth: '326px', flex: '1', margin: 0, height: '42px' }}>
               <Search size={18} className="search-icon" />
               <input 
                 type="text" 
@@ -486,6 +509,8 @@ const ProjectsPanel: React.FC = () => {
             style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
           >
             <option value="Todos">Todos Status</option>
+            <option value="---">--- (Não definido)</option>
+            <option value="Não iniciado">Não iniciado</option>
             <option value="Na fila">Na fila</option>
             <option value="Em andamento">Em andamento</option>
             <option value="Atrasado">Atrasado</option>
@@ -500,9 +525,52 @@ const ProjectsPanel: React.FC = () => {
             style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
           >
             <option value="Todas">Todas Prioridades</option>
+            <option value="---">--- (Não definida)</option>
             <option value="Alta">Alta</option>
             <option value="Média">Média</option>
             <option value="Baixa">Baixa</option>
+          </select>
+
+          <select 
+            className="filter-select" 
+            value={filterAnalyst} 
+            onChange={(e) => setFilterAnalyst(e.target.value)}
+            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+          >
+            <option value="Todos">Analista (Todos)</option>
+            {analysts.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+
+          <select 
+            className="filter-select" 
+            value={filterSolution} 
+            onChange={(e) => setFilterSolution(e.target.value)}
+            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+          >
+            <option value="Todas">Solução (Todas)</option>
+            {solutions.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+
+          <select 
+            className="filter-select" 
+            value={filterWhatsapp} 
+            onChange={(e) => setFilterWhatsapp(e.target.value)}
+            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+          >
+            <option value="Todos">WhatsApp (Todos)</option>
+            <option value="Com Grupo">Com Grupo</option>
+            <option value="Sem Grupo">Sem Grupo</option>
+          </select>
+
+          <select 
+            className="filter-select" 
+            value={filterMonthly} 
+            onChange={(e) => setFilterMonthly(e.target.value)}
+            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+          >
+            <option value="Todos">Mensalidade (Tudo)</option>
+            <option value="Com Mensalidade">Com Mensalidade</option>
+            <option value="Sem Mensalidade">Sem Mensalidade</option>
           </select>
 
           <select 
@@ -775,6 +843,8 @@ const ProjectsPanel: React.FC = () => {
                 <div className="form-group">
                   <label>Status Atual</label>
                   <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                    <option value="---">--- (Não definido)</option>
+                    <option value="Não iniciado">Não iniciado</option>
                     <option value="Na fila">Na fila</option>
                     <option value="Em andamento">Em andamento</option>
                     <option value="Atrasado">Atrasado</option>

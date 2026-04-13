@@ -47,6 +47,7 @@ const PortfoliosPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
+  const [filterAnalyst, setFilterAnalyst] = useState('Todos');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState<Portfolio | null>(null);
@@ -221,8 +222,8 @@ const PortfoliosPanel: React.FC = () => {
       for (const ap of asanaPortfolios) {
          const newPortfolio = {
             name: ap.name,
-            owner: ap.owner?.name || 'Asana Import',
-            description: ap.notes || 'Importado do Asana'
+            owner: ap.owner?.name || '---',
+            description: ap.notes || '---'
          };
 
          const res = await fetch(`${API_URL}/portfolios`, {
@@ -324,7 +325,17 @@ const PortfoliosPanel: React.FC = () => {
     reader.readAsText(file);
   };
 
-  const totalClients = portfolios.length;
+  const filteredPortfolios = portfolios.filter(p => {
+    const matchesSearch = (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
+                         (p.description || '').toLowerCase().includes(search.toLowerCase());
+    const matchesAnalyst = filterAnalyst === 'Todos' || p.owner === filterAnalyst;
+    
+    return matchesSearch && matchesAnalyst;
+  });
+
+  const analysts = Array.from(new Set(portfolios.map(p => p.owner).filter(Boolean))).sort();
+
+  const totalClients = filteredPortfolios.length;
   const totalProjectsLink = projects.filter(p => portfolios.some(c => c.name === p.client_name)).length;
 
   if (loading) return <div style={{ padding: '2rem' }}>Carregando painel de portfólios...</div>;
@@ -343,7 +354,7 @@ const PortfoliosPanel: React.FC = () => {
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-             <div className="search-bar" style={{ minWidth: '200px', flex: '1', margin: 0, height: '42px' }}>
+             <div className="search-bar" style={{ minWidth: '326px', flex: '1', margin: 0, height: '42px' }}>
                <Search size={18} className="search-icon" />
                <input 
                  type="text" 
@@ -409,7 +420,18 @@ const PortfoliosPanel: React.FC = () => {
         </div>
       </div>
 
-      <div className="filter-row" style={{ justifyContent: 'flex-end' }}>
+      <div className="filter-row" style={{ flexWrap: 'wrap', gap: '1rem', justifyContent: 'flex-end' }}>
+        <div className="filters-group" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <select 
+            className="filter-select" 
+            value={filterAnalyst} 
+            onChange={(e) => setFilterAnalyst(e.target.value)}
+            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+          >
+            <option value="Todos">Analista (Todos)</option>
+            {analysts.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
 
         <div className="view-toggle">
           <button 
@@ -431,16 +453,10 @@ const PortfoliosPanel: React.FC = () => {
 
       {viewMode === 'grid' ? (
         <div className="projects-grid">
-          {portfolios.filter(p => 
-            p.name.toLowerCase().includes(search.toLowerCase()) || 
-            (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
-          ).length === 0 ? (
-            <p style={{ color: 'var(--text-muted)' }}>Nenhum cliente encontrado.</p>
+          {filteredPortfolios.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>Nenhum portfólio encontrado.</p>
           ) : (
-            portfolios.filter(p => 
-              p.name.toLowerCase().includes(search.toLowerCase()) || 
-              (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
-            ).map(portfolio => {
+            filteredPortfolios.map(portfolio => {
               const linkedProjects = projects.filter(p => p.client_name === portfolio.name);
               const projectCount = linkedProjects.length;
               
@@ -498,20 +514,14 @@ const PortfoliosPanel: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {portfolios.filter(p => 
-                p.name.toLowerCase().includes(search.toLowerCase()) || 
-                (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
-              ).length === 0 ? (
+              {filteredPortfolios.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
-                    Nenhum cliente encontrado.
+                    Nenhum portfólio encontrado.
                   </td>
                 </tr>
               ) : (
-                portfolios.filter(p => 
-                  p.name.toLowerCase().includes(search.toLowerCase()) || 
-                  (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
-                ).map(portfolio => {
+                filteredPortfolios.map(portfolio => {
                   const linkedProjects = projects.filter(p => p.client_name === portfolio.name);
                   return (
                     <tr key={portfolio.id}>
