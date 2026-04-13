@@ -111,8 +111,8 @@ const ProjectsPanel: React.FC = () => {
     try {
       // 1. Fetch Projects from Asana
       const projectsUrl = workspaceId 
-        ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete,custom_fields`
-        : `https://app.asana.com/api/1.0/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete,custom_fields`;
+        ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete,num_tasks,num_completed_tasks,custom_fields`
+        : `https://app.asana.com/api/1.0/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete,num_tasks,num_completed_tasks,custom_fields`;
 
       const response = await fetch(projectsUrl, {
         headers: { 'Authorization': `Bearer ${asanaToken}` }
@@ -158,7 +158,7 @@ const ProjectsPanel: React.FC = () => {
         }));
       }
 
-      alert(`Encontrei ${asanaProjects.length} projetos no Asana. Sincronizando com o banco local...`);
+      alert(`Encontrei ${asanaProjects.length} projetos no Asana. Iniciando cálculo de progresso e sincronização detalhada. Isso pode levar alguns minutos devidos aos limites de requisição do Asana...`);
 
       const getCustomFieldValue = (fields: any[], name: string) => {
         const field = fields?.find(f => f.name.toLowerCase() === name.toLowerCase());
@@ -166,14 +166,36 @@ const ProjectsPanel: React.FC = () => {
       };
 
       let importedCount = 0;
+      // We will batch fetch task counts to not hit rate limits too hard (limit of 60/min for task_counts on Standard asana API, though we'll try sequential with a tiny delay if needed, or just sequential for now).
+      // Since there might be 300 projects, doing it sequentially might take 30s-1m. We will alert the user.
       for (const ap of asanaProjects) {
         const customFields = ap.custom_fields || [];
         
+        let calculatedProgress = ap.percentage_complete || 0;
+        
+        try {
+          const taskCountRes = await fetch(`https://app.asana.com/api/1.0/projects/${ap.gid}/task_counts?opt_fields=num_tasks,num_completed_tasks`, {
+            headers: { 'Authorization': `Bearer ${asanaToken}` }
+          });
+          
+          if (taskCountRes.ok) {
+            const countData = await taskCountRes.json();
+            const counts = countData.data;
+            if (counts && counts.num_tasks > 0) {
+              calculatedProgress = Math.round((counts.num_completed_tasks / counts.num_tasks) * 100);
+            } else if (counts && counts.num_tasks === 0) {
+              calculatedProgress = 0;
+            }
+          }
+        } catch (e) {
+          console.error(`Falha ao buscar task counts para o projeto ${ap.name}`, e);
+        }
+
         const newProject = {
           priority: getCustomFieldValue(customFields, 'Prioridade Projeto') || '---',
           name: ap.name,
           client_name: projectToClientName[ap.gid] || '---', 
-          progress: ap.percentage_complete || 0,
+          progress: calculatedProgress,
           status: getCustomFieldValue(customFields, 'Status Projeto') || ap.current_status?.text || '---',
           is_live: (getCustomFieldValue(customFields, 'Status Projeto') || '').toLowerCase().includes('live') || 
                    (getCustomFieldValue(customFields, 'Status Projeto') || '').toLowerCase().includes('produção'),
