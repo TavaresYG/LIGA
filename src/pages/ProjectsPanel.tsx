@@ -49,7 +49,6 @@ const ProjectsPanel: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [filterPriority, setFilterPriority] = useState('Todas');
-  const [filterLive, setFilterLive] = useState('Todos');
   const [filterAnalyst, setFilterAnalyst] = useState('Todos');
   const [filterSolution, setFilterSolution] = useState('Todas');
   const [filterWhatsapp, setFilterWhatsapp] = useState('Todos');
@@ -397,11 +396,8 @@ const ProjectsPanel: React.FC = () => {
     const matchesMonthly = filterMonthly === 'Todos' || 
                           (filterMonthly === 'Com Mensalidade' && Number(p.monthly_fee) > 0) || 
                           (filterMonthly === 'Sem Mensalidade' && (!p.monthly_fee || Number(p.monthly_fee) === 0));
-    const matchesLive = filterLive === 'Todos' || 
-                       (filterLive === 'Sim' && p.is_live) || 
-                       (filterLive === 'Não' && !p.is_live);
     
-    return matchesSearch && matchesStatus && matchesPriority && matchesAnalyst && matchesSolution && matchesWhatsapp && matchesMonthly && matchesLive;
+    return matchesSearch && matchesStatus && matchesPriority && matchesAnalyst && matchesSolution && matchesWhatsapp && matchesMonthly;
   });
 
   const analysts = Array.from(new Set(projects.map(p => p.analyst).filter(Boolean))).sort();
@@ -571,17 +567,6 @@ const ProjectsPanel: React.FC = () => {
             <option value="Todos">Mensalidade (Tudo)</option>
             <option value="Com Mensalidade">Com Mensalidade</option>
             <option value="Sem Mensalidade">Sem Mensalidade</option>
-          </select>
-
-          <select 
-            className="filter-select" 
-            value={filterLive} 
-            onChange={(e) => setFilterLive(e.target.value)}
-            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
-          >
-            <option value="Todos">Todos (Virados ou não)</option>
-            <option value="Sim">Apenas Virados</option>
-            <option value="Não">Não Virados</option>
           </select>
         </div>
 
