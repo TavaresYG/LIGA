@@ -852,6 +852,16 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete ALL projects
+app.delete('/api/projects-all', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM projects');
+    res.json({ message: 'Todos os projetos excluídos com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao deletar projetos: ' + err.message });
+  }
+});
+
 // Delete a project
 app.delete('/api/projects/:id', authenticateToken, async (req, res) => {
   try {

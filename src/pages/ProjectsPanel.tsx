@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { 
   Briefcase, 
@@ -15,7 +15,11 @@ import {
   LayoutGrid,
   List,
   Search,
-  X
+  X,
+  Loader2,
+  RefreshCw,
+  Upload,
+  Download
 } from 'lucide-react';
 import '../styles/projects.css';
 
@@ -43,6 +47,8 @@ const ProjectsPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
+  const [isSyncingAsana, setIsSyncingAsana] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -84,6 +90,201 @@ const ProjectsPanel: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch clients', err);
     }
+  };
+
+  const handleSyncAsana = async () => {
+    const asanaToken = localStorage.getItem('asana_token');
+    const workspaceId = localStorage.getItem('asana_workspace');
+
+    if (!asanaToken) {
+      alert('Token do Asana não configurado. Vá no menu de Administrador > Integrações.');
+      return;
+    }
+
+    setIsSyncingAsana(true);
+    try {
+      // 1. Fetch Projects from Asana
+      const projectsUrl = workspaceId 
+        ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete`
+        : `https://app.asana.com/api/1.0/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete`;
+
+      const response = await fetch(projectsUrl, {
+        headers: { 'Authorization': `Bearer ${asanaToken}` }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const message = errorData.errors ? errorData.errors[0].message : 'Status ' + response.status;
+        throw new Error('Falha na API do Asana: ' + message);
+      }
+
+      const { data: asanaProjects } = await response.json();
+      
+      if (!asanaProjects || asanaProjects.length === 0) {
+        alert('Nenhum projeto encontrado no seu Asana.');
+        setIsSyncingAsana(false);
+        return;
+      }
+
+      // 2. Fetch Portfolios and their items to map Project -> Client
+      // We'll use the already loaded clients in our DB to save time
+      const portfoliosUrl = workspaceId 
+        ? `https://app.asana.com/api/1.0/portfolios?workspace=${workspaceId}&owner=me&opt_fields=name,gid`
+        : `https://app.asana.com/api/1.0/portfolios?owner=me&opt_fields=name,gid`;
+
+      const portfRes = await fetch(portfoliosUrl, { headers: { 'Authorization': `Bearer ${asanaToken}` } });
+      const projectToClientName: Record<string, string> = {};
+
+      if (portfRes.ok) {
+        const { data: portfolios } = await portfRes.json();
+        await Promise.all(portfolios.map(async (p: any) => {
+          try {
+            const itemsRes = await fetch(`https://app.asana.com/api/1.0/portfolios/${p.gid}/items?opt_fields=name`, {
+               headers: { 'Authorization': `Bearer ${asanaToken}` }
+            });
+            if (itemsRes.ok) {
+              const { data: items } = await itemsRes.json();
+              items.forEach((item: any) => {
+                projectToClientName[item.gid] = p.name;
+              });
+            }
+          } catch (e) {}
+        }));
+      }
+
+      alert(`Encontrei ${asanaProjects.length} projetos no Asana. Sincronizando com o banco local...`);
+
+      let importedCount = 0;
+      for (const ap of asanaProjects) {
+        const newProject = {
+          priority: 'Média', // Default
+          name: ap.name,
+          client_name: projectToClientName[ap.gid] || '', 
+          progress: ap.percentage_complete || 0,
+          status: ap.current_status?.text || 'Em andamento',
+          is_live: false,
+          solution_hired: 'Importado do Asana',
+          analyst: ap.owner?.name || '',
+          whatsapp_group: '',
+          monthly_fee: 0
+        };
+
+        const res = await fetch(`${API_URL}/projects`, {
+           method: 'POST',
+           headers: {
+             'Content-Type': 'application/json',
+             Authorization: `Bearer ${token}`
+           },
+           body: JSON.stringify(newProject)
+        });
+        if (res.ok) importedCount++;
+      }
+
+      if (importedCount > 0) {
+        alert(`${importedCount} projetos sincronizados/atualizados com sucesso!`);
+        fetchProjects();
+        fetchClients();
+      } else {
+        alert('Nenhum projeto foi importado. Verifique os logs.');
+      }
+
+    } catch (error: any) {
+      console.error(error);
+      alert('Erro crítico na sincronização: ' + (error.message || error));
+    } finally {
+      setIsSyncingAsana(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (!window.confirm('CUIDADO: Tem certeza que deseja excluir TODOS os projetos de uma vez? Esta ação não pode ser desfeita.')) return;
+    try {
+      const res = await fetch(`${API_URL}/projects-all`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setProjects([]);
+        alert('Todos os projetos foram excluídos com sucesso!');
+      } else {
+        alert('Erro ao excluir projetos.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = ['nome', 'cliente', 'solucao_contratada', 'analista', 'status', 'progresso', 'mensalidade', 'cliente_virado', 'prioridade', 'whatsapp'];
+    const exampleRow = ['Implantação LIGAERP', 'Supermercado Exemplo', 'LIGA ERP', 'João Silva', 'Em andamento', '45', '1500.00', 'nao', 'Media', 'https://chat.whatsapp.com/...'];
+    const csvContent = [headers.join(';'), exampleRow.join(';')].join('\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'modelo_importacao_projetos.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (lines.length <= 1) {
+          alert('O arquivo está vazio ou não possui dados válidos.');
+          return;
+        }
+
+        const separator = lines[0].includes(';') ? ';' : ',';
+        let importedCount = 0;
+
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(separator);
+          if (cols.length >= 1 && cols[0].trim()) {
+            const newProject = {
+              name: cols[0]?.trim() || '',
+              client_name: cols[1]?.trim() || '',
+              solution_hired: cols[2]?.trim() || '',
+              analyst: cols[3]?.trim() || '',
+              status: cols[4]?.trim() || 'Em andamento',
+              progress: Number(cols[5]?.trim()) || 0,
+              monthly_fee: Number(cols[6]?.trim()) || 0,
+              is_live: (cols[7]?.trim() || '').toLowerCase() === 'sim',
+              priority: cols[8]?.trim() || 'Média',
+              whatsapp_group: cols[9]?.trim() || ''
+            };
+            const res = await fetch(`${API_URL}/projects`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify(newProject)
+            });
+            if (res.ok) importedCount++;
+          }
+        }
+
+        if (importedCount > 0) {
+          alert(`${importedCount} projeto(s) importado(s) com sucesso!`);
+          fetchProjects();
+          fetchClients();
+        } else {
+          alert('Nenhum dado válido para importação.');
+        }
+      } catch (err) {
+        alert('Erro ao processar arquivo CSV.');
+      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
   };
 
   useEffect(() => {
@@ -168,16 +369,16 @@ const ProjectsPanel: React.FC = () => {
     }
   };
 
-  const activeProjects = projects.filter(p => p.status !== 'Concluído').length;
-  const liveProjects = projects.filter(p => p.is_live).length;
-  const avgProgress = projects.length ? (projects.reduce((acc, p) => acc + (p.progress || 0), 0) / projects.length).toFixed(0) : 0;
+  const activeProjects = projects.filter(p => p && p.status !== 'Concluído').length;
+  const liveProjects = projects.filter(p => p && p.is_live).length;
+  const avgProgress = projects.length ? (projects.reduce((acc, p) => acc + (p?.progress || 0), 0) / projects.length).toFixed(0) : 0;
 
   if (loading) return <div style={{ padding: '2rem' }}>Carregando painel de projetos...</div>;
 
   return (
     <div className="projects-page fade-in">
       
-      <div className="projects-header">
+      <div className="projects-header" style={{ alignItems: 'center' }}>
         <div>
           <div className="projects-title">
             <Briefcase size={28} color="var(--accent)" />
@@ -185,10 +386,43 @@ const ProjectsPanel: React.FC = () => {
           </div>
           <p className="projects-subtitle">Acompanhe em tempo real o andamento e a saúde das implantações e entregas ativas.</p>
         </div>
-        <div className="projects-actions">
-          <button className="btn-add-project" onClick={() => handleOpenModal()}>
-            <Plus size={18} /> Novo Projeto
-          </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button 
+              className="btn-add-project" 
+              style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
+              onClick={handleSyncAsana}
+              disabled={isSyncingAsana}
+            >
+              {isSyncingAsana ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} 
+              Asana
+            </button>
+
+            <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
+            <button 
+              className="btn-add-project" 
+              style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={16} /> Importar Planilha
+            </button>
+
+            <button 
+              className="btn-add-project" 
+              style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
+              onClick={handleDownloadTemplate}
+            >
+              <Download size={16} /> Modelo XLS
+            </button>
+
+            <button className="btn-add-project" onClick={() => handleOpenModal()}>
+              <Plus size={18} /> Novo Projeto
+            </button>
+
+            <button className="btn-add-project btn-danger" onClick={handleDeleteAll}>
+              <Trash2 size={18} /> Limpar Todos
+            </button>
+          </div>
         </div>
       </div>
 
@@ -248,16 +482,16 @@ const ProjectsPanel: React.FC = () => {
       {viewMode === 'grid' ? (
         <div className="projects-grid">
           {projects.filter(p => 
-            p.name.toLowerCase().includes(search.toLowerCase()) || 
-            p.client_name.toLowerCase().includes(search.toLowerCase())
+            (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
+            (p.client_name || '').toLowerCase().includes(search.toLowerCase())
           ).length === 0 ? (
             <p style={{ color: 'var(--text-muted)' }}>Nenhum projeto encontrado.</p>
           ) : (
             projects.filter(p => 
-              p.name.toLowerCase().includes(search.toLowerCase()) || 
-              p.client_name.toLowerCase().includes(search.toLowerCase())
+              (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
+              (p.client_name || '').toLowerCase().includes(search.toLowerCase())
             ).map(project => (
-              <div key={project.id} className={`project-card priority-${project.priority.toLowerCase()}`}>
+              <div key={project.id} className={`project-card priority-${(project.priority || 'Média').toLowerCase()}`}>
                 
                 <div className="project-header">
                   <div>
@@ -352,8 +586,8 @@ const ProjectsPanel: React.FC = () => {
             </thead>
             <tbody>
               {projects.filter(p => 
-                p.name.toLowerCase().includes(search.toLowerCase()) || 
-                p.client_name.toLowerCase().includes(search.toLowerCase())
+                (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
+                (p.client_name || '').toLowerCase().includes(search.toLowerCase())
               ).length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
@@ -362,8 +596,8 @@ const ProjectsPanel: React.FC = () => {
                 </tr>
               ) : (
                 projects.filter(p => 
-                  p.name.toLowerCase().includes(search.toLowerCase()) || 
-                  p.client_name.toLowerCase().includes(search.toLowerCase())
+                  (p.name || '').toLowerCase().includes(search.toLowerCase()) || 
+                  (p.client_name || '').toLowerCase().includes(search.toLowerCase())
                 ).map(project => (
                   <tr key={project.id}>
                     <td>
@@ -431,7 +665,7 @@ const ProjectsPanel: React.FC = () => {
                     {isAutocompleteOpen && formData.client_name.trim() !== '' && (
                       <div className="autocomplete-dropdown">
                         {clients
-                          .filter(c => c.toLowerCase().includes(formData.client_name.toLowerCase()) && c !== formData.client_name)
+                          .filter(c => (c || '').toLowerCase().includes((formData.client_name || '').toLowerCase()) && c !== formData.client_name)
                           .map((client, idx) => (
                             <div 
                               key={idx} 
