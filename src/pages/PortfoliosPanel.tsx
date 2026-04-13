@@ -13,6 +13,9 @@ import {
   RefreshCw,
   Upload,
   Download,
+  LayoutGrid,
+  List,
+  Search,
   Loader2
 } from 'lucide-react';
 import '../styles/projects.css';
@@ -42,6 +45,8 @@ const PortfoliosPanel: React.FC = () => {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [search, setSearch] = useState('');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState<Portfolio | null>(null);
@@ -195,11 +200,23 @@ const PortfoliosPanel: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Falha ao autenticar com Asana.');
+        const errorData = await response.json().catch(() => ({}));
+        const message = errorData.errors ? errorData.errors[0].message : 'Status ' + response.status;
+        throw new Error('Falha na API do Asana: ' + message);
       }
 
       const { data: asanaPortfolios } = await response.json();
+      
+      if (!asanaPortfolios || asanaPortfolios.length === 0) {
+        alert('O Asana respondeu com sucesso, mas retornou 0 portfólios cadastrados para o seu usuário neste Workspace.');
+        setIsSyncingAsana(false);
+        return;
+      }
+
+      alert(`Sucesso! Encontrei ${asanaPortfolios.length} portfólios no Asana. Iniciando importação...`);
+
       let importedCount = 0;
+      let errorCount = 0;
 
       for (const ap of asanaPortfolios) {
          const newPortfolio = {
@@ -216,18 +233,25 @@ const PortfoliosPanel: React.FC = () => {
             },
             body: JSON.stringify(newPortfolio)
          });
-         if (res.ok) importedCount++;
+         
+         if (res.ok) {
+           importedCount++;
+         } else {
+           const errorBody = await res.json().catch(() => ({}));
+           console.error('Falha ao salvar portfólio localmente:', errorBody);
+           errorCount++;
+         }
       }
 
       if (importedCount > 0) {
-        alert(`${importedCount} portfólios importados e/ou atualizados do Asana!`);
+        alert(`${importedCount} portfólios sincronizados com sucesso!${errorCount > 0 ? ` (${errorCount} falhas de gravação local)` : ''}`);
         fetchData();
       } else {
-        alert('Nenhum portfólio novo encontrado no Asana.');
+        alert('Falha total ao processar os portfólios encontrados. O servidor local (porta 5000) pode estar desligado ou recusando a conexão.');
       }
     } catch (error: any) {
       console.error(error);
-      alert('Erro ao tentar importar do Asana.');
+      alert('Erro crítico na sincronização: ' + (error.message || error));
     } finally {
       setIsSyncingAsana(false);
     }
@@ -308,7 +332,7 @@ const PortfoliosPanel: React.FC = () => {
   return (
     <div className="projects-page fade-in">
       
-      <div className="projects-header" style={{ alignItems: 'flex-start' }}>
+      <div className="projects-header" style={{ alignItems: 'center' }}>
         <div>
           <div className="projects-title">
             <Building2 size={28} color="var(--accent)" />
@@ -317,8 +341,8 @@ const PortfoliosPanel: React.FC = () => {
           <p className="projects-subtitle">Gerencie e cadastre todos os seus clientes e centralize o vínculo com as implantações.</p>
         </div>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
              <button 
                className="btn-add-project" 
                style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
@@ -349,11 +373,11 @@ const PortfoliosPanel: React.FC = () => {
              <button className="btn-add-project" onClick={() => handleOpenModal()}>
                <Plus size={18} /> Novo Portfólio
              </button>
+
+             <button className="btn-add-project btn-danger" onClick={handleDeleteAll}>
+               <Trash2 size={18} /> Limpar Todos
+             </button>
           </div>
-          
-          <button onClick={handleDeleteAll} style={{ color: '#ef4444', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>
-            Excluir todos os portfólios
-          </button>
         </div>
       </div>
 
@@ -374,55 +398,146 @@ const PortfoliosPanel: React.FC = () => {
         </div>
       </div>
 
-      <div className="projects-grid">
-        {portfolios.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)' }}>Nenhum cliente registrado ainda.</p>
-        ) : (
-          portfolios.map(portfolio => {
-            const linkedProjects = projects.filter(p => p.client_name === portfolio.name);
-            const projectCount = linkedProjects.length;
-            
-            return (
-              <div key={portfolio.id} className="project-card" style={{ borderTop: '4px solid var(--accent)' }}>
-                <div className="project-header">
-                  <div>
-                    <div className="project-brand" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <FileText size={12} /> {new Date(portfolio.created_at).toLocaleDateString()}
-                    </div>
-                    <h3 className="project-name">{portfolio.name}</h3>
-                  </div>
-                  <div className="project-actions">
-                    <button className="btn-edit" onClick={() => handleViewDetails(portfolio)} title="Ver Detalhes e Projetos"><Eye size={16} /></button>
-                    <button className="btn-edit" onClick={() => handleOpenModal(portfolio)} title="Editar"><Edit2 size={16} /></button>
-                    <button className="btn-del" onClick={() => handleDelete(portfolio.id, portfolio.name)} title="Excluir"><Trash2 size={16} /></button>
-                  </div>
-                </div>
+      <div className="filter-row">
+        <div className="search-bar">
+          <Search size={18} className="search-icon" />
+          <input 
+            type="text" 
+            placeholder="Buscar por nome do cliente ou descrição..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
-                <div className="project-details" style={{ gridTemplateColumns: '1fr', marginTop: '1rem' }}>
-                  <div className="detail-item">
-                    <span className="detail-label">Nome do cliente</span>
-                    <span className="detail-value">{portfolio.name}</span>
-                  </div>
-
-                  <div className="detail-item">
-                    <span className="detail-label">Projetos vinculados</span>
-                    <span className="detail-value text-accent font-semibold flex items-center gap-1">
-                       <Activity size={14} /> {projectCount}
-                    </span>
-                  </div>
-
-                  <div className="detail-item">
-                    <span className="detail-label">Descrição</span>
-                    <span className="detail-value" style={{ whiteSpace: 'pre-wrap', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                      {portfolio.description || 'Sem descrição cadastrada.'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
+        <div className="view-toggle">
+          <button 
+            className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`} 
+            onClick={() => setViewMode('grid')}
+            title="Visualização em Grade"
+          >
+            <LayoutGrid size={20} />
+          </button>
+          <button 
+            className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`} 
+            onClick={() => setViewMode('list')}
+            title="Visualização em Lista"
+          >
+            <List size={20} />
+          </button>
+        </div>
       </div>
+
+      {viewMode === 'grid' ? (
+        <div className="projects-grid">
+          {portfolios.filter(p => 
+            p.name.toLowerCase().includes(search.toLowerCase()) || 
+            (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
+          ).length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>Nenhum cliente encontrado.</p>
+          ) : (
+            portfolios.filter(p => 
+              p.name.toLowerCase().includes(search.toLowerCase()) || 
+              (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
+            ).map(portfolio => {
+              const linkedProjects = projects.filter(p => p.client_name === portfolio.name);
+              const projectCount = linkedProjects.length;
+              
+              return (
+                <div key={portfolio.id} className="project-card" style={{ borderTop: '4px solid var(--accent)' }}>
+                  <div className="project-header">
+                    <div>
+                      <div className="project-brand" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <FileText size={12} /> {new Date(portfolio.created_at).toLocaleDateString()}
+                      </div>
+                      <h3 className="project-name">{portfolio.name}</h3>
+                    </div>
+                    <div className="project-actions">
+                      <button className="btn-edit" onClick={() => handleViewDetails(portfolio)} title="Ver Detalhes e Projetos"><Eye size={16} /></button>
+                      <button className="btn-edit" onClick={() => handleOpenModal(portfolio)} title="Editar"><Edit2 size={16} /></button>
+                      <button className="btn-del" onClick={() => handleDelete(portfolio.id, portfolio.name)} title="Excluir"><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+
+                  <div className="project-details" style={{ gridTemplateColumns: '1fr', marginTop: '1rem' }}>
+                    <div className="detail-item">
+                      <span className="detail-label">Nome do cliente</span>
+                      <span className="detail-value">{portfolio.name}</span>
+                    </div>
+
+                    <div className="detail-item">
+                      <span className="detail-label">Projetos vinculados</span>
+                      <span className="detail-value text-accent font-semibold flex items-center gap-1">
+                         <Activity size={14} /> {projectCount}
+                      </span>
+                    </div>
+
+                    <div className="detail-item">
+                      <span className="detail-label">Descrição</span>
+                      <span className="detail-value" style={{ whiteSpace: 'pre-wrap', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        {portfolio.description || 'Sem descrição cadastrada.'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      ) : (
+        <div className="portfolios-list-container">
+          <table className="portfolios-table">
+            <thead>
+              <tr>
+                <th>Nome do Cliente</th>
+                <th>Responsável</th>
+                <th>Projetos</th>
+                <th>Criado em</th>
+                <th style={{ textAlign: 'right' }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {portfolios.filter(p => 
+                p.name.toLowerCase().includes(search.toLowerCase()) || 
+                (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
+              ).length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                    Nenhum cliente encontrado.
+                  </td>
+                </tr>
+              ) : (
+                portfolios.filter(p => 
+                  p.name.toLowerCase().includes(search.toLowerCase()) || 
+                  (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
+                ).map(portfolio => {
+                  const linkedProjects = projects.filter(p => p.client_name === portfolio.name);
+                  return (
+                    <tr key={portfolio.id}>
+                      <td style={{ fontWeight: '700', color: 'var(--text-heading)' }}>{portfolio.name}</td>
+                      <td>{portfolio.owner || '—'}</td>
+                      <td>
+                        <div className="list-project-count">
+                          <Activity size={14} /> {linkedProjects.length} Projetos
+                        </div>
+                      </td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                        {new Date(portfolio.created_at).toLocaleDateString()}
+                      </td>
+                      <td>
+                        <div className="list-actions">
+                          <button className="btn-edit" onClick={() => handleViewDetails(portfolio)} title="Ver Detalhes"><Eye size={18} /></button>
+                          <button className="btn-edit" onClick={() => handleOpenModal(portfolio)} title="Editar"><Edit2 size={18} /></button>
+                          <button className="btn-del" onClick={() => handleDelete(portfolio.id, portfolio.name)} title="Excluir"><Trash2 size={18} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* MODAL CADASTRAR / EDITAR */}
       {isModalOpen && (

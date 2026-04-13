@@ -12,6 +12,9 @@ import {
   DollarSign,
   Edit2,
   Trash2,
+  LayoutGrid,
+  List,
+  Search,
   X
 } from 'lucide-react';
 import '../styles/projects.css';
@@ -38,6 +41,8 @@ const ProjectsPanel: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -211,92 +216,190 @@ const ProjectsPanel: React.FC = () => {
         </div>
       </div>
 
-      <div className="projects-grid">
-        {projects.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)' }}>Nenhum projeto registrado ainda.</p>
-        ) : (
-          projects.map(project => (
-            <div key={project.id} className={`project-card priority-${project.priority.toLowerCase()}`}>
-              
-              <div className="project-header">
-                <div>
-                  <div className="project-brand" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Users size={12} /> {project.client_name || 'Individual'}
-                    <span style={{ opacity: 0.3 }}>|</span>
-                    {project.solution_hired}
-                  </div>
-                  <h3 className="project-name">{project.name}</h3>
-                </div>
-                <div className="project-actions">
-                  <button className="btn-edit" onClick={() => handleOpenModal(project)}><Edit2 size={16} /></button>
-                  <button className="btn-del" onClick={() => handleDelete(project.id)}><Trash2 size={16} /></button>
-                </div>
-              </div>
+      <div className="filter-row">
+        <div className="search-bar">
+          <Search size={18} className="search-icon" />
+          <input 
+            type="text" 
+            placeholder="Buscar por nome do projeto ou cliente..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
-              <div className="project-progress-container">
-                <div className="progress-header">
-                  <span>Progresso da Implantação</span>
-                  <span className="progress-value">{project.progress}%</span>
-                </div>
-                <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${project.progress}%` }}></div>
-                </div>
-              </div>
-
-              <div className="project-details">
-                 <div className="detail-item">
-                   <span className="detail-label">Status</span>
-                   <span className="detail-value">
-                     {project.status === 'Atrasado' ? <AlertCircle size={14} color="#ef4444" /> : <Clock size={14} color="var(--accent)" />}
-                     {project.status}
-                   </span>
-                 </div>
-                 
-                 <div className="detail-item">
-                   <span className="detail-label">Analista Responsável</span>
-                   <span className="detail-value">{project.analyst || '—'}</span>
-                 </div>
-                 
-                 <div className="detail-item">
-                   <span className="detail-label">Cliente Virado</span>
-                   <span className="detail-value">
-                     <span className={`status-badge live-${project.is_live ? 'yes' : 'no'}`}>
-                       {project.is_live ? 'Sim (Em Produção)' : 'Não'}
-                     </span>
-                   </span>
-                 </div>
-
-                 <div className="detail-item">
-                   <span className="detail-label">Mensalidade</span>
-                   <span className="detail-value">
-                     <DollarSign size={14} /> 
-                     {Number(project.monthly_fee).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                   </span>
-                 </div>
-
-                 <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
-                    <span className="detail-label">Grupo de Acompanhamento</span>
-                    <span className="detail-value">
-                      <MessageCircle size={14} color="#128c7e"/>
-                      {project.whatsapp_group ? (
-                        project.whatsapp_group.startsWith('http') ? (
-                          <a href={project.whatsapp_group} target="_blank" rel="noopener noreferrer" className="whatsapp-link">
-                            Acessar WhatsApp
-                          </a>
-                        ) : (
-                          project.whatsapp_group
-                        )
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>Sem grupo</span>
-                      )}
-                    </span>
-                 </div>
-              </div>
-
-            </div>
-          ))
-        )}
+        <div className="view-toggle">
+          <button 
+            className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`} 
+            onClick={() => setViewMode('grid')}
+            title="Visualização em Grade"
+          >
+            <LayoutGrid size={20} />
+          </button>
+          <button 
+            className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`} 
+            onClick={() => setViewMode('list')}
+            title="Visualização em Lista"
+          >
+            <List size={20} />
+          </button>
+        </div>
       </div>
+
+      {viewMode === 'grid' ? (
+        <div className="projects-grid">
+          {projects.filter(p => 
+            p.name.toLowerCase().includes(search.toLowerCase()) || 
+            p.client_name.toLowerCase().includes(search.toLowerCase())
+          ).length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>Nenhum projeto encontrado.</p>
+          ) : (
+            projects.filter(p => 
+              p.name.toLowerCase().includes(search.toLowerCase()) || 
+              p.client_name.toLowerCase().includes(search.toLowerCase())
+            ).map(project => (
+              <div key={project.id} className={`project-card priority-${project.priority.toLowerCase()}`}>
+                
+                <div className="project-header">
+                  <div>
+                    <div className="project-brand" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Users size={12} /> {project.client_name || 'Individual'}
+                      <span style={{ opacity: 0.3 }}>|</span>
+                      {project.solution_hired}
+                    </div>
+                    <h3 className="project-name">{project.name}</h3>
+                  </div>
+                  <div className="project-actions">
+                    <button className="btn-edit" onClick={() => handleOpenModal(project)}><Edit2 size={16} /></button>
+                    <button className="btn-del" onClick={() => handleDelete(project.id)}><Trash2 size={16} /></button>
+                  </div>
+                </div>
+
+                <div className="project-progress-container">
+                  <div className="progress-header">
+                    <span>Progresso da Implantação</span>
+                    <span className="progress-value">{project.progress}%</span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-fill" style={{ width: `${project.progress}%` }}></div>
+                  </div>
+                </div>
+
+                <div className="project-details">
+                   <div className="detail-item">
+                     <span className="detail-label">Status</span>
+                     <span className="detail-value">
+                       {project.status === 'Atrasado' ? <AlertCircle size={14} color="#ef4444" /> : <Clock size={14} color="var(--accent)" />}
+                       {project.status}
+                     </span>
+                   </div>
+                   
+                   <div className="detail-item">
+                     <span className="detail-label">Analista Responsável</span>
+                     <span className="detail-value">{project.analyst || '—'}</span>
+                   </div>
+                   
+                   <div className="detail-item">
+                     <span className="detail-label">Cliente Virado</span>
+                     <span className="detail-value">
+                       <span className={`status-badge live-${project.is_live ? 'yes' : 'no'}`}>
+                         {project.is_live ? 'Sim (Em Produção)' : 'Não'}
+                       </span>
+                     </span>
+                   </div>
+
+                   <div className="detail-item">
+                     <span className="detail-label">Mensalidade</span>
+                     <span className="detail-value">
+                       <DollarSign size={14} /> 
+                       {Number(project.monthly_fee).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                     </span>
+                   </div>
+
+                   <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
+                      <span className="detail-label">Grupo de Acompanhamento</span>
+                      <span className="detail-value">
+                        <MessageCircle size={14} color="#128c7e"/>
+                        {project.whatsapp_group ? (
+                          project.whatsapp_group.startsWith('http') ? (
+                            <a href={project.whatsapp_group} target="_blank" rel="noopener noreferrer" className="whatsapp-link">
+                              Acessar WhatsApp
+                            </a>
+                          ) : (
+                            project.whatsapp_group
+                          )
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>Sem grupo</span>
+                        )}
+                      </span>
+                   </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="portfolios-list-container">
+          <table className="portfolios-table">
+            <thead>
+              <tr>
+                <th>Nome do Projeto</th>
+                <th>Cliente</th>
+                <th>Status</th>
+                <th>Progresso</th>
+                <th>Analista</th>
+                <th style={{ textAlign: 'right' }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.filter(p => 
+                p.name.toLowerCase().includes(search.toLowerCase()) || 
+                p.client_name.toLowerCase().includes(search.toLowerCase())
+              ).length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                    Nenhum projeto encontrado.
+                  </td>
+                </tr>
+              ) : (
+                projects.filter(p => 
+                  p.name.toLowerCase().includes(search.toLowerCase()) || 
+                  p.client_name.toLowerCase().includes(search.toLowerCase())
+                ).map(project => (
+                  <tr key={project.id}>
+                    <td>
+                       <div style={{ display: 'flex', flexDirection: 'column' }}>
+                         <span style={{ fontWeight: '700', color: 'var(--text-heading)' }}>{project.name}</span>
+                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{project.solution_hired}</span>
+                       </div>
+                    </td>
+                    <td>{project.client_name || 'Individual'}</td>
+                    <td>
+                      <span className={`status-badge live-${project.is_live ? 'yes' : 'no'}`} style={{ fontSize: '0.7rem' }}>
+                        {project.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div className="progress-bar" style={{ width: '60px' }}>
+                           <div className="progress-fill" style={{ width: `${project.progress}%` }}></div>
+                        </div>
+                        <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent)' }}>{project.progress}%</span>
+                      </div>
+                    </td>
+                    <td>{project.analyst || '—'}</td>
+                    <td>
+                       <div className="list-actions">
+                         <button className="btn-edit" onClick={() => handleOpenModal(project)}><Edit2 size={18} /></button>
+                         <button className="btn-del" onClick={() => handleDelete(project.id)}><Trash2 size={18} /></button>
+                       </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="modal-overlay" onClick={handleCloseModal}>
