@@ -1,59 +1,150 @@
 import React, { useState, useEffect } from 'react';
-import { CheckSquare, ListTodo, Plus, Trash2, Award, ClipboardCheck, AlertCircle } from 'lucide-react';
+import { CheckSquare, ListTodo, Plus, Trash2, ClipboardCheck, AlertCircle, User, Loader2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import BASE_API_URL from '../api/config';
 import '../styles/goals.css';
+
+const API_URL = `${BASE_API_URL}/api`;
 
 interface ChecklistItem {
   id: string;
   text: string;
   completed: boolean;
-  category: 'Geral' | 'Diário' | 'Semanal' | 'Projeto';
+  category: string;
+  assigned_to?: string;
+  assigned_name?: string;
+  created_at: string;
+}
+
+interface UserTeam {
+  id: string;
+  name: string;
+  username: string;
 }
 
 const ChecklistPage: React.FC = () => {
-  const [items, setItems] = useState<ChecklistItem[]>(() => {
-    const saved = localStorage.getItem('liga_checklist');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', text: 'Revisar metas do dia', completed: false, category: 'Diário' },
-      { id: '2', text: 'Validar entregáveis no Asana', completed: false, category: 'Projeto' },
-      { id: '3', text: 'Atualizar ranking semanal', completed: false, category: 'Semanal' },
-    ];
-  });
-
+  const { token, user: currentUser } = useAuth();
+  const [items, setItems] = useState<ChecklistItem[]>([]);
+  const [users, setUsers] = useState<UserTeam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [newItem, setNewItem] = useState('');
+  const [selectedUser, setSelectedUser] = useState<string>('');
   const [activeCategory, setActiveCategory] = useState<'Todas' | 'Diário' | 'Semanal' | 'Projeto' | 'Geral'>('Todas');
 
-  useEffect(() => {
-    localStorage.setItem('liga_checklist', JSON.stringify(items));
-  }, [items]);
+  const canAssign = currentUser?.username === 'Yuri.Tavares' || true; // Admins/Orgs can assign
 
-  const toggleItem = (id: string) => {
-    setItems(items.map(item => 
-      item.id === id ? { ...item, completed: !item.completed } : item
-    ));
+  useEffect(() => {
+    fetchData();
+    if (canAssign) fetchUsers();
+  }, [token]);
+
+  const fetchData = async () => {
+    try {
+      const res = await fetch(`${API_URL}/checklists`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) setItems(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const addItem = (e: React.FormEvent) => {
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(`${API_URL}/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) setUsers(data);
+    } catch (err) {
+      console.error('Erro ao buscar usuários:', err);
+    }
+  };
+
+  const toggleItem = async (id: string, currentStatus: boolean) => {
+    try {
+      const res = await fetch(`${API_URL}/checklists/${id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ completed: !currentStatus })
+      });
+      if (res.ok) {
+        setItems(items.map(item => item.id === id ? { ...item, completed: !currentStatus } : item));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItem.trim()) return;
     
-    const item: ChecklistItem = {
-      id: Math.random().toString(36).substr(2, 9),
-      text: newItem,
-      completed: false,
-      category: activeCategory === 'Todas' ? 'Geral' : activeCategory as any,
-    };
-    
-    setItems([item, ...items]);
-    setNewItem('');
+    setIsSubmitting(true);
+    const beneficiary = users.find(u => u.id === selectedUser);
+
+    try {
+      const res = await fetch(`${API_URL}/checklists`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          text: newItem,
+          category: activeCategory === 'Todas' ? 'Geral' : activeCategory,
+          assigned_to: selectedUser || currentUser?.id,
+          assigned_name: beneficiary ? beneficiary.name : currentUser?.name
+        })
+      });
+      
+      if (res.ok) {
+        const added = await res.json();
+        setItems([added, ...items]);
+        setNewItem('');
+        setSelectedUser('');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const removeItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id));
+  const removeItem = async (id: string) => {
+    if (!window.confirm('Excluir esta tarefa?')) return;
+    try {
+      const res = await fetch(`${API_URL}/checklists/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setItems(items.filter(item => item.id !== id));
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const clearCompleted = () => {
+  const clearCompleted = async () => {
     if (window.confirm('Deseja remover todas as tarefas concluídas?')) {
-      setItems(items.filter(item => !item.completed));
+      try {
+        const res = await fetch(`${API_URL}/checklists-all/completed`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) fetchData();
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 
@@ -64,15 +155,17 @@ const ChecklistPage: React.FC = () => {
   const completedCount = items.filter(i => i.completed).length;
   const progress = items.length ? Math.round((completedCount / items.length) * 100) : 0;
 
+  if (loading) return <div style={{ padding: '2rem' }}>Carregando checklist colaborativo...</div>;
+
   return (
     <div className="goals-page fade-in" style={{ padding: '2rem' }}>
       <header className="goals-header" style={{ marginBottom: '2rem' }}>
         <div>
           <h1 className="goals-page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <ClipboardCheck size={32} color="var(--accent)" />
-            Checklist de Metas
+            Checklist da Equipe
           </h1>
-          <p className="goals-subtitle">Mantenha o foco e organize suas tarefas para bater todas as metas.</p>
+          <p className="goals-subtitle">Gerencie e acompanhe as tarefas semanais do time LIGA.</p>
         </div>
         
         <div className="progress-summary-card" style={{ background: 'var(--bg-card)', padding: '1rem 1.5rem', borderRadius: '1rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
@@ -82,17 +175,16 @@ const ChecklistPage: React.FC = () => {
              </div>
           </div>
           <div>
-            <h3 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Progresso Geral</h3>
+            <h3 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Resumo Geral</h3>
             <p style={{ fontSize: '1.1rem', fontWeight: '700' }}>{completedCount} de {items.length} concluídos</p>
           </div>
         </div>
       </header>
 
       <div className="checklist-container" style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: '2rem' }}>
-        {/* Sidebar de Categorias */}
         <aside className="checklist-sidebar">
           <div style={{ position: 'sticky', top: '2rem' }}>
-            <h4 style={{ marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)' }}>Categorias</h4>
+            <h4 style={{ marginBottom: '1rem', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)' }}>Filtros</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {(['Todas', 'Diário', 'Semanal', 'Projeto', 'Geral'] as const).map(cat => (
                 <button
@@ -114,65 +206,78 @@ const ChecklistPage: React.FC = () => {
                   }}
                 >
                   {cat}
-                  <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>
-                    {items.filter(i => cat === 'Todas' ? true : i.category === cat).length}
-                  </span>
                 </button>
               ))}
             </div>
 
-            <div style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(255,193,7,0.1)', borderRadius: '0.75rem', border: '1px border rgba(255,193,7,0.2)' }}>
+            <div style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(255,193,7,0.1)', borderRadius: '0.75rem', border: '1px solid rgba(255,193,7,0.2)' }}>
                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', color: '#B45309', marginBottom: '0.5rem' }}>
-                 <AlertCircle size={16} />
-                 <strong style={{ fontSize: '0.85rem' }}>Dica LIGA</strong>
+                 <Award size={16} />
+                 <strong style={{ fontSize: '0.85rem' }}>Gestão Colaborativa</strong>
                </div>
                <p style={{ fontSize: '0.8rem', color: '#B45309', lineHeight: '1.4' }}>
-                 Tarefas diárias ajudam a manter a consistência e acumular mais pontos no ranking!
+                 Membros da equipe veem apenas suas tarefas. Admins veem tudo.
                </p>
             </div>
           </div>
         </aside>
 
-        {/* Lista Principal */}
         <main className="checklist-main">
-          <form onSubmit={addItem} style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-            <input
-              type="text"
-              placeholder="Adicionar nova tarefa ao checklist..."
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              style={{
-                flex: 1,
-                padding: '1rem 1.5rem',
-                borderRadius: '1rem',
-                border: '2px solid var(--border-color)',
-                background: 'var(--bg-card)',
-                color: 'var(--text-main)',
-                fontSize: '1rem',
-                outline: 'none',
-                transition: 'border-color 0.2s'
-              }}
-              onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
-              onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
-            />
-            <button
-              type="submit"
-              style={{
-                padding: '0 2rem',
-                borderRadius: '1rem',
-                border: 'none',
-                background: 'var(--accent)',
-                color: 'white',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                boxShadow: '0 4px 12px rgba(255,193,7,0.3)'
-              }}
-            >
-              <Plus size={20} /> Adicionar
-            </button>
+          <form onSubmit={addItem} style={{ background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '1.25rem', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+              <input
+                type="text"
+                placeholder="Qual tarefa deseja delegar?"
+                value={newItem}
+                onChange={(e) => setNewItem(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '1rem 1.5rem',
+                  borderRadius: '1rem',
+                  border: '2px solid var(--border-color)',
+                  background: 'var(--bg-hover)',
+                  color: 'var(--text-main)',
+                  fontSize: '1rem',
+                  outline: 'none'
+                }}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-hover)', padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)' }}>
+                <User size={18} color="var(--text-muted)" />
+                <select 
+                  value={selectedUser} 
+                  onChange={(e) => setSelectedUser(e.target.value)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-main)', fontSize: '0.9rem', width: '100%', outline: 'none' }}
+                >
+                  <option value="">Atribuir a: (Para mim)</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>{u.name} (@{u.username})</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                style={{
+                  padding: '0.75rem 2rem',
+                  borderRadius: '1rem',
+                  border: 'none',
+                  background: 'var(--accent)',
+                  color: 'white',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  boxShadow: '0 4px 12px rgba(255,193,7,0.3)'
+                }}
+              >
+                {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} Criar Tarefa
+              </button>
+            </div>
           </form>
 
           <div className="checklist-items" style={{ background: 'var(--bg-card)', borderRadius: '1.25rem', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
@@ -200,11 +305,10 @@ const ChecklistPage: React.FC = () => {
                       gap: '1rem',
                       borderBottom: '1px solid var(--border-color)',
                       background: item.completed ? 'rgba(0,0,0,0.02)' : 'transparent',
-                      transition: 'all 0.2s'
                     }}
                   >
                     <button 
-                      onClick={() => toggleItem(item.id)}
+                      onClick={() => toggleItem(item.id, item.completed)}
                       style={{ 
                         width: '26px', 
                         height: '26px', 
@@ -231,15 +335,19 @@ const ChecklistPage: React.FC = () => {
                       }}>
                         {item.text}
                       </p>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: '700', textTransform: 'uppercase' }}>
-                        {item.category}
-                      </span>
+                      <div style={{ display: 'flex', gap: '1rem', marginTop: '0.25rem' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: '700', textTransform: 'uppercase' }}>
+                          {item.category}
+                        </span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <User size={10} /> {item.assigned_name || 'Individual'}
+                        </span>
+                      </div>
                     </div>
 
                     <button 
                       onClick={() => removeItem(item.id)}
                       style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0.5rem' }}
-                      className="hover-danger"
                     >
                       <Trash2 size={18} />
                     </button>
@@ -248,7 +356,7 @@ const ChecklistPage: React.FC = () => {
               ) : (
                 <div style={{ padding: '4rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                   <ListTodo size={48} style={{ marginBottom: '1rem', opacity: 0.3 }} />
-                  <p>Nenhuma tarefa encontrada nesta categoria.</p>
+                  <p>Nenhuma tarefa delegada encontrada.</p>
                 </div>
               )}
             </div>

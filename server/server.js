@@ -873,6 +873,76 @@ app.delete('/api/projects/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ===================== CHECKLISTS =====================
+
+// Get all checklist items (admin/org see all, member see theirs)
+app.get('/api/checklists', authenticateToken, async (req, res) => {
+  try {
+    const roleResult = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
+    const role = roleResult.rows.length > 0 ? roleResult.rows[0].role : (req.user.username === 'Yuri.Tavares' ? 'admin' : 'member');
+    
+    let result;
+    if (role === 'admin' || role === 'organizador') {
+      result = await pool.query('SELECT * FROM checklists ORDER BY created_at DESC');
+    } else {
+      result = await pool.query('SELECT * FROM checklists WHERE assigned_to = $1 ORDER BY created_at DESC', [req.user.id]);
+    }
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar checklist: ' + err.message });
+  }
+});
+
+// Create a checklist item
+app.post('/api/checklists', authenticateToken, async (req, res) => {
+  const { text, category, assigned_to, assigned_name } = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO checklists (text, category, assigned_to, assigned_name, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [text, category || 'Geral', assigned_to, assigned_name, req.user.id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao criar item de checklist: ' + err.message });
+  }
+});
+
+// Update a checklist item (toggle completed)
+app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { completed } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE checklists SET completed = $1 WHERE id = $2 RETURNING *',
+      [completed, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Item não encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar checklist: ' + err.message });
+  }
+});
+
+// Delete a checklist item
+app.delete('/api/checklists/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM checklists WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Item excluído com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao deletar item: ' + err.message });
+  }
+});
+
+// Clear completed items
+app.delete('/api/checklists-all/completed', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM checklists WHERE completed = TRUE');
+    res.json({ message: 'Itens concluídos removidos' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao limpar checklist' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });

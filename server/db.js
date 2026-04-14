@@ -176,6 +176,20 @@ const initDb = async () => {
       );
     `);
 
+    // 12. Shared Checklists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS checklists (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        text TEXT NOT NULL,
+        completed BOOLEAN DEFAULT FALSE,
+        category VARCHAR(50) DEFAULT 'Geral',
+        assigned_to UUID REFERENCES users(id) ON DELETE CASCADE,
+        assigned_name VARCHAR(255),
+        created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log('✅ Banco de dados inicializado com sucesso (tabelas de gamificação incluídas).');
   } catch (err) {
     console.error('❌ Erro ao inicializar o banco de dados:', err.message);
