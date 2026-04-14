@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import RankingPage from './pages/RankingPage'
@@ -10,264 +10,306 @@ import PortfoliosPanel from './pages/PortfoliosPanel'
 import ChecklistPage from './pages/ChecklistPage'
 import PointDistributionPage from './pages/PointDistributionPage'
 import KickoffForm from './components/KickoffForm'
+import PreKickoffForm from './components/PreKickoffForm'
 import AdminPanel from './components/AdminPanel'
 import Dashboard from './components/Dashboard'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SavedDoc, FormData } from './types'
-import { Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag, Settings, Receipt, ChevronDown, FileText, Target, Award, Briefcase, ClipboardList, Scale } from 'lucide-react'
+import {
+  Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag,
+  Settings, ChevronDown, FileText, Target, Award, Briefcase
+} from 'lucide-react'
 import './App.css'
 
 import BASE_API_URL from './api/config';
 const API_URL = `${BASE_API_URL}/api`;
 
-type View = 'dashboard' | 'form' | 'ranking' | 'loja' | 'extrato' | 'kickoff' | 'goals' | 'projects' | 'portfolios' | 'checklist' | 'distribuicao';
+type View = 'dashboard' | 'form' | 'kickoff' | 'ranking' | 'loja' | 'extrato' | 'goals' | 'projects' | 'portfolios' | 'checklist' | 'distribuicao';
 
 function AppContent() {
-  const { user, logout, loading, token } = useAuth();
-  const [view, setView] = useState<View>('dashboard');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [userRole, setUserRole] = useState<string>('member');
-  const [pendingPointsCount, setPendingPointsCount] = useState(0);
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [showSignup, setShowSignup] = useState(false);
-
-  // For Kick-Off form
-  const [currentDoc, setCurrentDoc] = useState<SavedDoc | null>(null);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('liga-theme') as 'light' | 'dark';
-    if (savedTheme) setTheme(savedTheme);
-  }, []);
+  const { user, logout, loading, token } = useAuth()
+  const [view, setView] = useState<View>('dashboard')
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [showAdmin, setShowAdmin] = useState(false)
+  const [userRole, setUserRole] = useState<string>('member')
+  const [editingDoc, setEditingDoc] = useState<SavedDoc | null>(null)
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
+  const [pendingPointsCount, setPendingPointsCount] = useState(0)
+  const [showSignup, setShowSignup] = useState(false)
+  const [permissions, setPermissions] = useState<string[]>([])
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('liga-theme', theme);
-  }, [theme]);
+    const savedTheme = localStorage.getItem('liga-theme') as 'light' | 'dark'
+    if (savedTheme) setTheme(savedTheme)
+  }, [])
 
-  const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('liga-theme', theme)
+  }, [theme])
 
-  const fetchPermissions = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_URL}/me/permissions`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPermissions(data.permissions || []);
-      }
-    } catch (err) {
-      console.error('Erro ao buscar permissões:', err);
-    }
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light')
+
+  const DEFAULT_PERMISSIONS: Record<string, string[]> = {
+    admin:      ['dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao'],
+    organizador:['dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'checklist'],
+    member:     ['dashboard', 'ranking', 'loja', 'extrato', 'goals'],
   };
 
   useEffect(() => {
     if (!token) return;
-    fetchPermissions();
 
+    // Fetch permissions — fallback to role defaults if API fails or tables don't exist yet
+    fetch(`${API_URL}/me/permissions`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.permissions && data.permissions.length > 0) {
+          setPermissions(data.permissions);
+        }
+        // else: keep empty, will fall back via hasPerm below
+      })
+      .catch(() => {});
+
+    // Fetch role
     fetch(`${API_URL}/me/role`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
-      .then(data => setUserRole(data.role || 'member'));
+      .then(data => setUserRole(data.role || 'member'))
+      .catch(() => {});
 
+    // Fetch statement for pending badge
     fetch(`${API_URL}/me/statement`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          const pending = data.filter((item: any) => item.type === 'task' && !item.approved).length; 
-          setPendingPointsCount(pending);
+          setPendingPointsCount(data.filter((i: any) => i.type === 'task' && !i.approved).length);
         }
-      });
+      })
+      .catch(() => {});
   }, [token]);
 
-  const hasPerm = (v: string) => permissions.includes(v);
+  // If permissions not yet loaded from API, fall back to role defaults
+  const hasPerm = (v: string) => {
+    if (permissions.length > 0) return permissions.includes(v);
+    return (DEFAULT_PERMISSIONS[userRole] || DEFAULT_PERMISSIONS['member']).includes(v);
+  };
+  const canAccessAdmin = userRole === 'admin' || userRole === 'organizador';
 
   const handleNavClick = (v: View) => {
-    if (hasPerm(v)) setView(v);
-    else setView('dashboard');
+    setView(v);
+    setEditingDoc(null);
+    setActiveDropdown(null);
   };
 
-  const handleNewDoc = () => {
-    setCurrentDoc(null);
-    setView('kickoff');
-  };
-
-  const handleEditDoc = (doc: SavedDoc) => {
-    setCurrentDoc(doc);
-    setView('kickoff');
-  };
-
-  const handleSaveDoc = async (formData: FormData) => {
+  const handleSave = async (formData: FormData, docType: string) => {
     if (!token) return;
+    const body = { client_name: formData.nome, date: formData.data, implantador: formData.implantador, data: formData, type: docType };
     try {
-      const url = currentDoc 
-        ? `${API_URL}/documents/${currentDoc.id}` 
-        : `${API_URL}/documents`;
-      
-      const res = await fetch(url, {
-        method: currentDoc ? 'PUT' : 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          type: 'kickoff',
-          client_name: formData.nome,
-          date: formData.data,
-          implantador: formData.implantador,
-          data: formData
-        })
-      });
-
-      if (res.ok) {
-        setView('dashboard');
-        setCurrentDoc(null);
+      let response;
+      if (editingDoc) {
+        response = await fetch(`${API_URL}/documents/${editingDoc.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(body)
+        });
       } else {
-        alert('Erro ao salvar documento');
+        response = await fetch(`${API_URL}/documents`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(body)
+        });
+      }
+      if (response.ok) {
+        setView('dashboard');
+        setEditingDoc(null);
+      } else {
+        const errData = await response.json();
+        alert('Erro ao salvar: ' + errData.error);
       }
     } catch (err) {
-      console.error(err);
-      alert('Falha na conexão com o servidor');
+      alert('Falha ao conectar com o servidor');
     }
   };
 
   if (loading) return <div className="loading-container"><div className="loader"></div></div>;
-  
+
   if (!user) {
-    return showSignup 
-      ? <SignupPage onToggleLogin={() => setShowSignup(false)} /> 
-      : <LoginPage onToggleSignup={() => setShowSignup(true)} />;
+    return (
+      <div className="auth-page">
+        {showSignup
+          ? <SignupPage onToggleLogin={() => setShowSignup(false)} />
+          : <LoginPage onToggleSignup={() => setShowSignup(true)} />
+        }
+      </div>
+    );
   }
 
   return (
-    <div className="app">
-      <nav className="navbar">
-        <div className="nav-container">
-          <div className="nav-logo" onClick={() => setView('dashboard')}>
-            <div className="logo-icon">L</div>
-            <h1>LIGA</h1>
+    <div className="app-container">
+      <header className="main-header">
+        <div className="header-content">
+          <div className="header-left">
+            <div className="brand" onClick={() => handleNavClick('dashboard')}>
+              <span className="logo">🔬</span>
+              <span className="title">LIGA</span>
+            </div>
           </div>
 
-          <div className="nav-center">
+          <nav className="main-nav">
+            {/* DASHBOARD */}
             {hasPerm('dashboard') && (
-              <button className={`nav-btn ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
-                <LayoutDashboard size={20} />
+              <button className={`nav-btn ${view === 'dashboard' ? 'active' : ''}`} onClick={() => handleNavClick('dashboard')}>
+                <LayoutDashboard size={18} />
                 <span>Dashboard</span>
               </button>
             )}
-            {hasPerm('ranking') && (
-              <button className={`nav-btn ${view === 'ranking' ? 'active' : ''}`} onClick={() => setView('ranking')}>
-                <Trophy size={20} />
-                <span>Ranking</span>
-              </button>
-            )}
-            {(hasPerm('projects') || hasPerm('portfolios')) && (
-                <div className="dropdown">
-                    <button className={`nav-btn ${(view === 'projects' || view === 'portfolios') ? 'active' : ''}`}>
-                    <Briefcase size={20} />
-                    <span>Painéis</span>
-                    <ChevronDown size={14} />
-                    </button>
-                    <div className="dropdown-content">
-                        {hasPerm('projects') && <button onClick={() => setView('projects')}>📅 Painel dos projetos</button>}
-                        {hasPerm('portfolios') && <button onClick={() => setView('portfolios')}>💼 Painel de portifólios</button>}
-                    </div>
-                </div>
-            )}
-            {(hasPerm('goals') || hasPerm('checklist')) && (
-               <div className="dropdown">
-                  <button className={`nav-btn ${(view === 'goals' || view === 'checklist') ? 'active' : ''}`}>
-                    <Target size={20} />
-                    <span>Metas</span>
-                    <ChevronDown size={14} />
-                  </button>
-                  <div className="dropdown-content">
-                    {hasPerm('goals') && <button onClick={() => setView('goals')}>🎯 Visualizar Metas</button>}
-                    {hasPerm('checklist') && <button onClick={() => setView('checklist')}>📋 Checklist Equipe</button>}
-                  </div>
-               </div>
-            )}
-            {(hasPerm('loja') || hasPerm('extrato') || hasPerm('distribuicao')) && (
-                <div className="dropdown">
-                    <button className={`nav-btn ${(view === 'loja' || view === 'extrato' || view === 'distribuicao') ? 'active' : ''}`}>
-                    <ShoppingBag size={20} />
-                    <span>Pontuação</span>
-                    <ChevronDown size={14} />
-                    </button>
-                    <div className="dropdown-content">
-                        {hasPerm('loja') && <button onClick={() => setView('loja')}>🛍️ Loja de Prêmios</button>}
-                        {hasPerm('extrato') && (
-                            <button onClick={() => setView('extrato')}>
-                                📜 Meu Extrato 
-                                {pendingPointsCount > 0 && <span className="nav-pending-badge">!</span>}
-                            </button>
-                        )}
-                        {hasPerm('distribuicao') && <button onClick={() => setView('distribuicao')}>⚖️ Distribuição de Pontos</button>}
-                    </div>
-                </div>
-            )}
-          </div>
 
-          <div className="nav-right">
-            <button className="theme-toggle" onClick={toggleTheme} title="Alternar tema">
-              {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-            </button>
-            <div className="user-menu-wrapper">
-              <div className="user-profile">
-                <div className="avatar">{user.name.charAt(0)}</div>
-                <div className="user-info">
-                  <span className="user-name">{user.name}</span>
-                  <span className="user-role">{userRole}</span>
-                </div>
-                <ChevronDown size={16} />
-              </div>
-              <div className="profile-dropdown">
-                {userRole === 'admin' && (
-                  <button onClick={() => setShowAdmin(true)}>
-                    <Settings size={18} /> Admin Panel
-                  </button>
-                )}
-                <button onClick={logout} className="logout-btn">
-                  <LogOut size={18} /> Sair
+            {/* PAINEL DROPDOWN */}
+            {(hasPerm('projects') || hasPerm('portfolios')) && (
+              <div className="nav-dropdown">
+                <button
+                  className={`nav-btn ${(view === 'projects' || view === 'portfolios') ? 'active' : ''}`}
+                  onMouseEnter={() => setActiveDropdown('painel')}
+                  onClick={() => setActiveDropdown(activeDropdown === 'painel' ? null : 'painel')}
+                >
+                  <Briefcase size={18} />
+                  <span>Painel</span>
+                  <ChevronDown size={14} className={activeDropdown === 'painel' ? 'rotated' : ''} />
                 </button>
+                {activeDropdown === 'painel' && (
+                  <div className="dropdown-menu" onMouseLeave={() => setActiveDropdown(null)}>
+                    {hasPerm('projects') && <button onClick={() => handleNavClick('projects')}>📅 Painel dos projetos</button>}
+                    {hasPerm('portfolios') && <button onClick={() => handleNavClick('portfolios')}>💼 Painel de portfólios</button>}
+                  </div>
+                )}
               </div>
+            )}
+
+            {/* DOCUMENTOS DROPDOWN */}
+            <div className="nav-dropdown">
+              <button
+                className={`nav-btn ${(view === 'form' || view === 'kickoff') ? 'active' : ''}`}
+                onMouseEnter={() => setActiveDropdown('docs')}
+                onClick={() => setActiveDropdown(activeDropdown === 'docs' ? null : 'docs')}
+              >
+                <FileText size={18} />
+                <span>Documentos</span>
+                <ChevronDown size={14} className={activeDropdown === 'docs' ? 'rotated' : ''} />
+              </button>
+              {activeDropdown === 'docs' && (
+                <div className="dropdown-menu" onMouseLeave={() => setActiveDropdown(null)}>
+                  <button onClick={() => { setEditingDoc(null); handleNavClick('form'); }}>📋 Pré Kick Off</button>
+                  <button onClick={() => { setEditingDoc(null); handleNavClick('kickoff'); }}>🚀 Kick Off</button>
+                </div>
+              )}
+            </div>
+
+            {/* METAS DROPDOWN */}
+            {(hasPerm('goals') || hasPerm('ranking') || hasPerm('checklist')) && (
+              <div className="nav-dropdown">
+                <button
+                  className={`nav-btn ${(view === 'goals' || view === 'ranking' || view === 'checklist') ? 'active' : ''}`}
+                  onMouseEnter={() => setActiveDropdown('metas')}
+                  onClick={() => setActiveDropdown(activeDropdown === 'metas' ? null : 'metas')}
+                >
+                  <Target size={18} />
+                  <span>Metas</span>
+                  <ChevronDown size={14} className={activeDropdown === 'metas' ? 'rotated' : ''} />
+                </button>
+                {activeDropdown === 'metas' && (
+                  <div className="dropdown-menu" onMouseLeave={() => setActiveDropdown(null)}>
+                    {hasPerm('goals') && <button onClick={() => handleNavClick('goals')}>🎯 Visualizar Metas</button>}
+                    {hasPerm('ranking') && <button onClick={() => handleNavClick('ranking')}>🏆 Ranking</button>}
+                    {hasPerm('checklist') && <button onClick={() => handleNavClick('checklist')}>📋 Checklist</button>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PONTUAÇÃO DROPDOWN */}
+            {(hasPerm('loja') || hasPerm('extrato') || hasPerm('distribuicao')) && (
+              <div className="nav-dropdown">
+                <button
+                  className={`nav-btn ${(view === 'loja' || view === 'extrato' || view === 'distribuicao') ? 'active' : ''}`}
+                  onMouseEnter={() => setActiveDropdown('pontos')}
+                  onClick={() => setActiveDropdown(activeDropdown === 'pontos' ? null : 'pontos')}
+                >
+                  <Award size={18} />
+                  <span>Pontuação</span>
+                  <ChevronDown size={14} className={activeDropdown === 'pontos' ? 'rotated' : ''} />
+                </button>
+                {activeDropdown === 'pontos' && (
+                  <div className="dropdown-menu" onMouseLeave={() => setActiveDropdown(null)}>
+                    {hasPerm('loja') && <button onClick={() => handleNavClick('loja')}>🛍️ Loja de Prêmios</button>}
+                    {hasPerm('extrato') && (
+                      <button onClick={() => handleNavClick('extrato')}>
+                        📜 Meu Extrato
+                        {pendingPointsCount > 0 && <span className="nav-pending-badge">!</span>}
+                      </button>
+                    )}
+                    {hasPerm('distribuicao') && <button onClick={() => handleNavClick('distribuicao')}>⚖️ Distribuição de Pontos</button>}
+                  </div>
+                )}
+              </div>
+            )}
+          </nav>
+
+          <div className="header-actions">
+            <div className="user-pill">
+              <User size={14} />
+              <span>{user?.name ? user.name.split(' ')[0] : 'Usuário'}</span>
+            </div>
+
+            <div className="action-icons">
+              {canAccessAdmin && (
+                <button onClick={() => setShowAdmin(true)} className="icon-btn-header gear" title="Painel Admin">
+                  <Settings size={20} />
+                </button>
+              )}
+              <button onClick={toggleTheme} className="icon-btn-header" title="Alternar Tema">
+                {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+              </button>
+              <button onClick={logout} className="icon-btn-header logout" title="Sair">
+                <LogOut size={20} />
+              </button>
             </div>
           </div>
         </div>
-      </nav>
+      </header>
 
-      <main className="content-container">
-        {view === 'dashboard' && hasPerm('dashboard') && (
-            <Dashboard 
-                onNewDoc={handleNewDoc} 
-                onViewDoc={handleEditDoc} 
-            />
+      <main className="main-content">
+        {view === 'dashboard' && (
+          <Dashboard
+            onNewDoc={() => { setEditingDoc(null); setView('form'); }}
+            onViewDoc={(doc) => { setEditingDoc(doc); setView(doc.type === 'kickoff' ? 'kickoff' : 'form'); }}
+          />
         )}
-        {view === 'ranking' && hasPerm('ranking') && <RankingPage />}
-        {view === 'loja' && hasPerm('loja') && <StorePage />}
-        {view === 'extrato' && hasPerm('extrato') && <StatementPage />}
-        {view === 'goals' && hasPerm('goals') && <GoalsPage />}
-        {view === 'projects' && hasPerm('projects') && <ProjectsPanel />}
-        {view === 'portfolios' && hasPerm('portfolios') && <PortfoliosPanel />}
-        {view === 'checklist' && hasPerm('checklist') && <ChecklistPage />}
-        {view === 'distribuicao' && hasPerm('distribuicao') && <PointDistributionPage />}
-        
+        {view === 'form' && (
+          <PreKickoffForm
+            initialData={editingDoc?.data}
+            onSave={(formData) => handleSave(formData, 'pre-kickoff')}
+            onCancel={() => setView('dashboard')}
+          />
+        )}
         {view === 'kickoff' && (
-            <KickoffForm 
-                initialData={currentDoc?.data} 
-                onSave={handleSaveDoc} 
-                onCancel={() => setView('dashboard')} 
-            />
+          <KickoffForm
+            initialData={editingDoc?.data}
+            onSave={(formData) => handleSave(formData, 'kickoff')}
+            onCancel={() => setView('dashboard')}
+          />
         )}
-
-        {!hasPerm(view) && hasPerm('dashboard') && (
-             <Dashboard onNewDoc={handleNewDoc} onViewDoc={handleEditDoc} />
-        )}
+        {view === 'ranking' && <RankingPage />}
+        {view === 'loja' && <StorePage />}
+        {view === 'extrato' && <StatementPage />}
+        {view === 'goals' && <GoalsPage />}
+        {view === 'projects' && <ProjectsPanel />}
+        {view === 'portfolios' && <PortfoliosPanel />}
+        {view === 'checklist' && <ChecklistPage />}
+        {view === 'distribuicao' && <PointDistributionPage />}
       </main>
 
       {showAdmin && <AdminPanel role={userRole} onClose={() => setShowAdmin(false)} />}
     </div>
-  );
+  )
 }
 
 function App() {
@@ -275,7 +317,7 @@ function App() {
     <AuthProvider>
       <AppContent />
     </AuthProvider>
-  );
+  )
 }
 
-export default App;
+export default App
