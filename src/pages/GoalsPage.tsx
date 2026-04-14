@@ -66,12 +66,12 @@ const GoalsPage: React.FC = () => {
         ]);
 
         if (resTasks && 'ok' in resTasks && resTasks.ok) {
-          const taskData: TaskType[] = await resTasks.json();
+          const taskData: TaskType[] = await (resTasks as Response).json();
           setTasks(taskData);
         }
 
         if (resStatement && 'ok' in resStatement && resStatement.ok) {
-          const statementData: StatementEntry[] = await resStatement.json();
+          const statementData: StatementEntry[] = await (resStatement as Response).json();
           const counts: Record<string, number> = {};
           statementData.forEach(entry => {
             if (entry.type === 'task') {
@@ -82,12 +82,12 @@ const GoalsPage: React.FC = () => {
         }
 
         if (resRole && 'ok' in resRole && resRole.ok) {
-          const roleData = await resRole.json();
+          const roleData = await (resRole as Response).json();
           setUserRole(roleData.role || 'member');
         }
 
         if (resUsers && 'ok' in resUsers && resUsers.ok) {
-          const userData: User[] = await resUsers.json();
+          const userData: User[] = await (resUsers as Response).json();
           setAllUsers(userData);
         }
       } catch (err) {

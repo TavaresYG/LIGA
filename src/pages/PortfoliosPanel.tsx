@@ -248,7 +248,7 @@ const PortfoliosPanel: React.FC = () => {
         alert(`${importedCount} portfólios sincronizados com sucesso!${errorCount > 0 ? ` (${errorCount} falhas de gravação local)` : ''}`);
         fetchData();
       } else {
-        alert('Falha total ao processar os portfólios encontrados. O servidor local (porta 5000) pode estar desligado ou recusando a conexão.');
+        alert('Não foi possível sincronizar os portfólios. Verifique se o servidor da API está respondendo corretamente.');
       }
     } catch (error: any) {
       console.error(error);
