@@ -478,6 +478,27 @@ Por favor, mantenha a aba aberta.`);
         </div>
         
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', transition: 'all 0.3s ease' }}>
+            {isSearchVisible && (
+              <input 
+                type="text" 
+                autoFocus
+                placeholder="Pesquisar..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ width: '160px', padding: '0.4rem 0.6rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.8rem', marginRight: '0.4rem', outline: 'none', boxShadow: '0 0 10px rgba(255,193,7,0.1)' }}
+              />
+            )}
+            <button 
+              onClick={() => setIsSearchVisible(!isSearchVisible)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', display: 'flex', alignItems: 'center' }}
+              title="Pesquisar"
+            >
+              <Search size={22} color="#FFC107" strokeWidth={3} />
+            </button>
+          </div>
+
           <button 
             className="btn-add-project" 
             style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
@@ -547,31 +568,9 @@ Por favor, mantenha a aba aberta.`);
       </div>
 
       <div className="filter-row" style={{ flexWrap: 'nowrap', gap: '0.5rem', justifyContent: 'space-between', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-        <div className="filters-group" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          
-          <div style={{ display: 'flex', alignItems: 'center', transition: 'all 0.3s ease' }}>
-            {isSearchVisible && (
-              <input 
-                type="text" 
-                autoFocus
-                placeholder="Pesquisar..." 
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ width: '180px', padding: '0.5rem 0.75rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem', marginRight: '0.5rem', outline: 'none', boxShadow: '0 0 10px rgba(255,193,7,0.1)' }}
-              />
-            )}
-            <button 
-              onClick={() => setIsSearchVisible(!isSearchVisible)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center' }}
-              title="Pesquisar"
-            >
-              <Search size={22} color="#FFC107" strokeWidth={3} />
-            </button>
-          </div>
-
+        <div className="filters-group" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', alignItems: 'center' }}>
           <select 
             className="filter-select" 
-            value={filterStatus} 
             onChange={(e) => setFilterStatus(e.target.value)}
             style={{ padding: '0.4rem 0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.78rem', minWidth: '120px' }}
           >
