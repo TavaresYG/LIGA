@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import LoginPage from './pages/LoginPage'
+import SignupPage from './pages/SignupPage'
 import RankingPage from './pages/RankingPage'
 import StorePage from './pages/StorePage'
 import StatementPage from './pages/StatementPage'
@@ -30,6 +31,10 @@ function AppContent() {
   const [userRole, setUserRole] = useState<string>('member');
   const [pendingPointsCount, setPendingPointsCount] = useState(0);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [showSignup, setShowSignup] = useState(false);
+
+  // For Kick-Off form
+  const [currentDoc, setCurrentDoc] = useState<SavedDoc | null>(null);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('liga-theme') as 'light' | 'dark';
@@ -70,7 +75,7 @@ function AppContent() {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          const pending = data.filter((item: any) => item.type === 'task' && !item.approved).length; // Adjust logic as needed
+          const pending = data.filter((item: any) => item.type === 'task' && !item.approved).length; 
           setPendingPointsCount(pending);
         }
       });
@@ -83,8 +88,23 @@ function AppContent() {
     else setView('dashboard');
   };
 
+  const handleNewDoc = () => {
+    setCurrentDoc(null);
+    setView('kickoff');
+  };
+
+  const handleEditDoc = (doc: SavedDoc) => {
+    setCurrentDoc(doc);
+    setView('kickoff');
+  };
+
   if (loading) return <div className="loading-container"><div className="loader"></div></div>;
-  if (!user) return <LoginPage />;
+  
+  if (!user) {
+    return showSignup 
+      ? <SignupPage onToggleLogin={() => setShowSignup(false)} /> 
+      : <LoginPage onToggleSignup={() => setShowSignup(true)} />;
+  }
 
   return (
     <div className="app">
@@ -184,7 +204,12 @@ function AppContent() {
       </nav>
 
       <main className="content-container">
-        {view === 'dashboard' && hasPerm('dashboard') && <Dashboard onNavigate={(v: View) => setView(v)} />}
+        {view === 'dashboard' && hasPerm('dashboard') && (
+            <Dashboard 
+                onNewDoc={handleNewDoc} 
+                onViewDoc={handleEditDoc} 
+            />
+        )}
         {view === 'ranking' && hasPerm('ranking') && <RankingPage />}
         {view === 'loja' && hasPerm('loja') && <StorePage />}
         {view === 'extrato' && hasPerm('extrato') && <StatementPage />}
@@ -194,8 +219,11 @@ function AppContent() {
         {view === 'checklist' && hasPerm('checklist') && <ChecklistPage />}
         {view === 'distribuicao' && hasPerm('distribuicao') && <PointDistributionPage />}
         
-        {/* Simple protection if view is restricted but somehow set */}
-        {!hasPerm(view) && <Dashboard onNavigate={(v: View) => setView(v)} />}
+        {view === 'kickoff' && <KickoffForm doc={currentDoc} onSave={() => setView('dashboard')} onCancel={() => setView('dashboard')} />}
+
+        {!hasPerm(view) && hasPerm('dashboard') && (
+             <Dashboard onNewDoc={handleNewDoc} onViewDoc={handleEditDoc} />
+        )}
       </main>
 
       {showAdmin && <AdminPanel role={userRole} onClose={() => setShowAdmin(false)} />}
