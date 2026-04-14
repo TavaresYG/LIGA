@@ -345,65 +345,65 @@ Verifique se você tem permissão de administrador ou se o servidor está online
   return (
     <div className="projects-page fade-in">
       
-      <div className="projects-header" style={{ alignItems: 'center' }}>
-        <div>
-          <div className="projects-title">
-            <Building2 size={28} color="var(--accent)" />
-            Painel de Portfólios
-          </div>
-          <p className="projects-subtitle">Gerencie e cadastre todos os seus clientes e centralize o vínculo com as implantações.</p>
+      <div className="projects-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '0.75rem', justifyContent: 'space-between', padding: '0.5rem 1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+          <Building2 size={22} color="var(--accent)" />
+          <h1 style={{ fontSize: '1.1rem', fontWeight: '800', whiteSpace: 'nowrap', margin: 0 }}>Portfólios</h1>
         </div>
         
-        <div style={{ flex: 1, width: '100%' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-             <div className="search-bar" style={{ width: '240px', flex: '0 0 240px', margin: 0, height: '42px' }}>
-               <Search size={18} className="search-icon" />
-               <input 
-                 type="text" 
-                 placeholder="Buscar cliente..." 
-                 value={search}
-                 onChange={(e) => setSearch(e.target.value)}
-                 style={{ height: '100%' }}
-               />
-             </div>
+        <div className="search-bar" style={{ width: '160px', flex: '0 1 160px', margin: 0, height: '36px', minWidth: '120px' }}>
+          <Search size={14} className="search-icon" />
+          <input 
+            type="text" 
+            placeholder="Buscar..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ height: '100%', fontSize: '0.8rem' }}
+          />
+        </div>
 
-             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-               <button 
-                 className="btn-add-project" 
-                 style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
-                 onClick={handleSyncAsana}
-                 disabled={isSyncingAsana}
-               >
-                 {isSyncingAsana ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} 
-                 Asana
-               </button>
-               
-               <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
-               <button 
-                 className="btn-add-project" 
-                 style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
-                 onClick={() => fileInputRef.current?.click()}
-               >
-                 <Upload size={16} /> Importar Planilha
-               </button>
+        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexShrink: 0 }}>
+          <button 
+            className="btn-add-project" 
+            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+            onClick={handleSyncAsana}
+            disabled={isSyncingAsana}
+          >
+            {isSyncingAsana ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} 
+             Asana
+          </button>
+          
+          <button 
+            className="btn-add-project" 
+            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={12} /> Importar
+          </button>
 
-               <button 
-                 className="btn-add-project" 
-                 style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
-                 onClick={handleDownloadTemplate}
-               >
-                 <Download size={16} /> Modelo XLS
-               </button>
+          <button 
+            className="btn-add-project" 
+            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+            onClick={handleDownloadTemplate}
+          >
+            <Download size={12} /> XLS
+          </button>
 
-               <button className="btn-add-project" onClick={() => handleOpenModal()}>
-                 <Plus size={18} /> Novo Portfólio
-               </button>
+          <button 
+            className="btn-add-project" 
+            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', fontWeight: '600' }} 
+            onClick={() => handleOpenModal()}
+          >
+            <Plus size={12} /> Novo
+          </button>
 
-               <button className="btn-add-project btn-danger" onClick={handleDeleteAll}>
-                 <Trash2 size={18} /> Limpar Todos
-               </button>
-             </div>
-          </div>
+          <button 
+            className="btn-add-project btn-danger" 
+            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', fontWeight: '600' }}
+            onClick={handleDeleteAll}
+          >
+            <Trash2 size={12} /> Limpar
+          </button>
         </div>
       </div>
 
