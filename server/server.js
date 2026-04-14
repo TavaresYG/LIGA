@@ -1053,6 +1053,91 @@ app.get('/api/me/permissions', authenticateToken, async (req, res) => {
   }
 });
 
+// ===================== CHECKLIST DA EQUIPE =====================
+
+// GET - Listar todos os checklists (admin/org vê tudo, membro vê só os seus)
+app.get('/api/checklists', authenticateToken, async (req, res) => {
+  try {
+    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
+    const role = roleRes.rows[0]?.role || 'member';
+    
+    let result;
+    if (role === 'admin' || role === 'organizador') {
+      result = await pool.query(
+        'SELECT * FROM checklists ORDER BY created_at DESC'
+      );
+    } else {
+      result = await pool.query(
+        'SELECT * FROM checklists WHERE assigned_to = $1 ORDER BY created_at DESC',
+        [req.user.id]
+      );
+    }
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST - Criar novo item de checklist
+app.post('/api/checklists', authenticateToken, async (req, res) => {
+  const { text, category, assigned_to, assigned_name } = req.body;
+  if (!text) return res.status(400).json({ error: 'Texto é obrigatório' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO checklists (text, category, assigned_to, assigned_name, created_by)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [text, category || 'Geral', assigned_to || req.user.id, assigned_name || null, req.user.id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT - Atualizar status (concluído/pendente) ou texto
+app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { completed, text, category } = req.body;
+  try {
+    const fields = [];
+    const values = [];
+    let idx = 1;
+    if (completed !== undefined) { fields.push(`completed = $${idx++}`); values.push(completed); }
+    if (text !== undefined) { fields.push(`text = $${idx++}`); values.push(text); }
+    if (category !== undefined) { fields.push(`category = $${idx++}`); values.push(category); }
+    if (!fields.length) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE checklists SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Item não encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE - Remover um item
+app.delete('/api/checklists/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM checklists WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Item removido' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE - Limpar todos os concluídos
+app.delete('/api/checklists-all/completed', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM checklists WHERE completed = TRUE');
+    res.json({ message: 'Tarefas concluídas removidas' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
