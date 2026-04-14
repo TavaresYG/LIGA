@@ -392,7 +392,7 @@ const PointDistributionPage: React.FC = () => {
                  <button 
                    onClick={() => addItemToGroup(activeGroup.id)}
                    className="btn-add-project" 
-                   style={{ padding: '0.6rem 1rem', borderRadius: '0.6rem', border: 'none', background: 'var(--bg-card)', color: 'var(--text-main)', boxShadow: 'none', border: '1px solid var(--border-color)' }}
+                   style={{ padding: '0.6rem 1rem', borderRadius: '0.6rem', background: 'var(--bg-card)', color: 'var(--text-main)', boxShadow: 'none', border: '1px solid var(--border-color)' }}
                  >
                    <Plus size={16} /> Add Item
                  </button>
