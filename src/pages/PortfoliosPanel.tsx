@@ -437,33 +437,56 @@ Verifique se você tem permissão de administrador ou se o servidor está online
         </div>
       </div>
 
-      <div className="filter-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'flex-start', alignItems: 'center' }}>
-        <div className="filters-group" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="filter-row" style={{ flexWrap: 'nowrap', gap: '0.5rem', justifyContent: 'space-between', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+        <div className="filters-group" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', alignItems: 'center' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {isSearchVisible && (
+              <input 
+                type="text" 
+                autoFocus
+                placeholder="Pesquisar..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ width: '160px', padding: '0.4rem 0.6rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.8rem', marginRight: '0.4rem', outline: 'none', boxShadow: '0 0 10px rgba(255,193,7,0.1)' }}
+              />
+            )}
+            <button 
+              onClick={() => setIsSearchVisible(!isSearchVisible)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', display: 'flex', alignItems: 'center' }}
+              title="Pesquisar"
+            >
+              <Search size={22} color="#FFC107" strokeWidth={3} />
+            </button>
+          </div>
+
           <select 
             className="filter-select" 
             value={filterAnalyst} 
             onChange={(e) => setFilterAnalyst(e.target.value)}
-            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.78rem', minWidth: '120px' }}
           >
             <option value="Todos">Analista (Todos)</option>
             {analysts.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
 
-        <div className="view-toggle">
+        <div className="view-toggle" style={{ flexShrink: 0 }}>
           <button 
             className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`} 
             onClick={() => setViewMode('grid')}
             title="Visualização em Grade"
+            style={{ padding: '0.4rem' }}
           >
-            <LayoutGrid size={20} />
+            <LayoutGrid size={18} />
           </button>
           <button 
             className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`} 
             onClick={() => setViewMode('list')}
             title="Visualização em Lista"
+            style={{ padding: '0.4rem' }}
           >
-            <List size={20} />
+            <List size={18} />
           </button>
         </div>
       </div>
