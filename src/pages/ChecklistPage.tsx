@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckSquare, ListTodo, Plus, Trash2, ClipboardCheck, AlertCircle, User, Loader2 } from 'lucide-react';
+import { CheckSquare, ListTodo, Plus, Trash2, ClipboardCheck, AlertCircle, User, Loader2, Award } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import BASE_API_URL from '../api/config';
 import '../styles/goals.css';
