@@ -86,7 +86,24 @@ function AppContent() {
         }
       })
       .catch(() => {});
-  }, [token]);
+
+    // ASANA AUTO-SYNC (Background Trigger)
+    const autoSync = localStorage.getItem('asana_auto_sync') === 'true';
+    const asanaToken = localStorage.getItem('asana_token');
+    if (autoSync && asanaToken && (userRole === 'admin' || userRole === 'organizador')) {
+      fetch(`${API_URL}/asana/sync`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ 
+          asanaToken, 
+          workspaceId: localStorage.getItem('asana_workspace') 
+        })
+      }).catch(e => console.log('Auto-sync skipped or deferred:', e.message));
+    }
+  }, [token, userRole]);
 
   // If permissions not yet loaded from API, fall back to role defaults
   const hasPerm = (v: string) => {

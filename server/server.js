@@ -1167,6 +1167,138 @@ app.delete('/api/checklists-all/completed', authenticateToken, requireOrganizado
   }
 });
 
+// ===================== ASANA BACKGROUND SYNC =====================
+
+const asanaSyncState = {
+  isRunning: false,
+  lastSyncAt: null,
+  lastSyncCount: 0,
+  lastSyncError: null,
+};
+
+const MIN_SYNC_INTERVAL_HOURS = 2; // Evita syncs automáticos excessivos
+
+// GET /api/asana/sync/status - Retorna o estado atual da sincronização
+app.get('/api/asana/sync/status', authenticateToken, (req, res) => {
+  res.json({
+    isRunning: asanaSyncState.isRunning,
+    lastSyncAt: asanaSyncState.lastSyncAt,
+    lastSyncCount: asanaSyncState.lastSyncCount,
+    lastSyncError: asanaSyncState.lastSyncError,
+    minIntervalHours: MIN_SYNC_INTERVAL_HOURS
+  });
+});
+
+// POST /api/asana/sync - Inicia a sincronização (apenas admin/organizador)
+app.post('/api/asana/sync', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
+  const { asanaToken, workspaceId, force } = req.body;
+  if (!asanaToken) return res.status(400).json({ error: 'Token do Asana é obrigatório' });
+
+  if (asanaSyncState.isRunning) {
+    return res.status(409).json({ error: 'Sincronização já em andamento' });
+  }
+
+  // Verifica se o intervalo mínimo foi respeitado (a menos que seja forçado manualmente)
+  if (!force && asanaSyncState.lastSyncAt) {
+    const hoursSince = (Date.now() - new Date(asanaSyncState.lastSyncAt).getTime()) / 3600000;
+    if (hoursSince < MIN_SYNC_INTERVAL_HOURS) {
+      return res.status(429).json({ 
+        error: `Aguarde o intervalo de ${MIN_SYNC_INTERVAL_HOURS}h entre sincronizações automáticas.`,
+        lastSyncAt: asanaSyncState.lastSyncAt
+      });
+    }
+  }
+
+  // Responde imediatamente e inicia o processo em background
+  res.json({ message: 'Sincronização iniciada' });
+  
+  runAsanaSync(asanaToken, workspaceId).catch(err => {
+    console.error('❌ [Asana Sync Error]:', err.message);
+  });
+});
+
+async function runAsanaSync(asanaToken, workspaceId) {
+  asanaSyncState.isRunning = true;
+  asanaSyncState.lastSyncError = null;
+  console.log('🔄 [Asana Sync] Iniciando processamento...');
+
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const asanaFetch = async (url) => {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${asanaToken}` } });
+    if (!res.ok) throw new Error(`Erro Asana: ${res.status}`);
+    return res.json();
+  };
+
+  try {
+    // 1. Buscar projetos
+    const projectsUri = workspaceId 
+      ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=name,current_status.text,custom_fields,owner.name`
+      : `https://app.asana.com/api/1.0/projects?opt_fields=name,current_status.text,custom_fields,owner.name`;
+
+    const { data: asanaProjects } = await asanaFetch(projectsUri);
+    
+    // 2. Mapear Portfólios para Clientes (opcional mas útil)
+    const projectToClient = {};
+    try {
+      const portfUri = workspaceId 
+        ? `https://app.asana.com/api/1.0/portfolios?workspace=${workspaceId}&owner=me&opt_fields=name,gid`
+        : `https://app.asana.com/api/1.0/portfolios?owner=me&opt_fields=name,gid`;
+      
+      const { data: portfolios } = await asanaFetch(portfUri);
+      for (const p of portfolios) {
+        await sleep(400); // Respeita limite da API
+        const { data: items } = await asanaFetch(`https://app.asana.com/api/1.0/portfolios/${p.gid}/items?opt_fields=name`);
+        items.forEach(it => { projectToClient[it.gid] = p.name; });
+      }
+    } catch (e) { console.warn('⚠️ Falha ao mapear portfólios'); }
+
+    const getVal = (fields, name) => {
+      const f = (fields || []).find(f => f.name.toLowerCase() === name.toLowerCase());
+      return f?.display_value || f?.text_value || f?.number_value || '---';
+    };
+
+    let count = 0;
+    for (const ap of asanaProjects) {
+      await sleep(400); // 400ms entre requisições = ~150 req/min (limite seguro)
+      
+      let prog = 0;
+      try {
+        const { data: counts } = await asanaFetch(`https://app.asana.com/api/1.0/projects/${ap.gid}/task_counts?opt_fields=num_tasks,num_completed_tasks`);
+        if (counts.num_tasks > 0) prog = Math.round((counts.num_completed_tasks / counts.num_tasks) * 100);
+      } catch (e) {}
+
+      const fields = ap.custom_fields || [];
+      const statusText = getVal(fields, 'Status Projeto') || ap.current_status?.text || '---';
+
+      await pool.query(`
+        INSERT INTO projects (priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        ON CONFLICT (name) DO UPDATE SET
+          priority = EXCLUDED.priority, client_name = EXCLUDED.client_name,
+          progress = EXCLUDED.progress, status = EXCLUDED.status,
+          is_live = EXCLUDED.is_live, solution_hired = EXCLUDED.solution_hired,
+          analyst = EXCLUDED.analyst, whatsapp_group = EXCLUDED.whatsapp_group,
+          monthly_fee = EXCLUDED.monthly_fee, updated_at = CURRENT_TIMESTAMP
+      `, [
+        getVal(fields, 'Prioridade Projeto'), ap.name, projectToClient[ap.gid] || '---',
+        prog, statusText, statusText.toLowerCase().includes('live'),
+        getVal(fields, 'Solução Contratada'), getVal(fields, 'Analista Responsável') || ap.owner?.name || '---',
+        getVal(fields, 'Grupo Whatsapp'), Number(getVal(fields, 'Mensalidade')) || 0
+      ]);
+      count++;
+    }
+
+    asanaSyncState.lastSyncAt = new Date().toISOString();
+    asanaSyncState.lastSyncCount = count;
+    console.log(`✅ [Asana Sync] Finalizado: ${count} projetos.`);
+  } catch (err) {
+    asanaSyncState.lastSyncError = err.message;
+    console.error('❌ [Asana Sync Final Error]:', err.message);
+  } finally {
+    asanaSyncState.isRunning = false;
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });

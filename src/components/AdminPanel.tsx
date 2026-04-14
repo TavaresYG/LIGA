@@ -33,18 +33,19 @@ const ALL_VIEWS = [
   { id: 'portfolios',  label: '💼 Painel de Portfólios' },
   { id: 'checklist',   label: '📋 Checklist Equipe' },
   { id: 'distribuicao',label: '⚖️ Distribuição de Pontos' },
+  { id: 'bi',          label: '📊 Painel BI' },
 ];
 
 const DEFAULT_ROLES: CustomRole[] = [
   {
     id: 'default-admin',
     name: 'Admin',
-    permissions: ['dashboard','form','kickoff','ranking','loja','extrato','goals','projects','portfolios','checklist','distribuicao']
+    permissions: ['dashboard','form','kickoff','ranking','loja','extrato','goals','projects','portfolios','checklist','distribuicao', 'bi']
   },
   {
     id: 'default-organizador',
     name: 'Organizador',
-    permissions: ['dashboard','form','kickoff','ranking','loja','extrato','goals','checklist']
+    permissions: ['dashboard','form','kickoff','ranking','loja','extrato','goals','checklist', 'bi']
   },
   {
     id: 'default-member',

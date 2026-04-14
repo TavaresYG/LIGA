@@ -111,135 +111,33 @@ const ProjectsPanel: React.FC = () => {
     }
 
     setIsSyncingAsana(true);
-    setSyncProgress(0);
-    setSyncTotal(0);
     try {
-      // 1. Fetch Projects from Asana
-      const projectsUrl = workspaceId 
-        ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete,num_tasks,num_completed_tasks,custom_fields`
-        : `https://app.asana.com/api/1.0/projects?opt_fields=name,notes,owner.name,current_status.text,percentage_complete,num_tasks,num_completed_tasks,custom_fields`;
-
-      const response = await fetch(projectsUrl, {
-        headers: { 'Authorization': `Bearer ${asanaToken}` }
+      const response = await fetch(`${API_URL}/asana/sync`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({ asanaToken, workspaceId, force: true })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const message = errorData.errors ? errorData.errors[0].message : 'Status ' + response.status;
-        throw new Error('Falha na API do Asana: ' + message);
-      }
-
-      const { data: asanaProjects } = await response.json();
-      
-      if (!asanaProjects || asanaProjects.length === 0) {
-        alert('Nenhum projeto encontrado no seu Asana.');
+      if (response.status === 429) {
+        const data = await response.json();
+        alert(data.error);
         setIsSyncingAsana(false);
         return;
       }
 
-      setSyncTotal(asanaProjects.length);
-      const portfoliosUrl = workspaceId 
-        ? `https://app.asana.com/api/1.0/portfolios?workspace=${workspaceId}&owner=me&opt_fields=name,gid`
-        : `https://app.asana.com/api/1.0/portfolios?owner=me&opt_fields=name,gid`;
+      if (!response.ok) throw new Error('Falha ao iniciar sincronização no servidor');
 
-      const portfRes = await fetch(portfoliosUrl, { headers: { 'Authorization': `Bearer ${asanaToken}` } });
-      const projectToClientName: Record<string, string> = {};
-
-      if (portfRes.ok) {
-        const { data: portfolios } = await portfRes.json();
-        await Promise.all(portfolios.map(async (p: any) => {
-          try {
-            const itemsRes = await fetch(`https://app.asana.com/api/1.0/portfolios/${p.gid}/items?opt_fields=name`, {
-               headers: { 'Authorization': `Bearer ${asanaToken}` }
-            });
-            if (itemsRes.ok) {
-              const { data: items } = await itemsRes.json();
-              items.forEach((item: any) => {
-                projectToClientName[item.gid] = p.name;
-              });
-            }
-          } catch (e) {}
-        }));
-      }
-
-      alert(`Iniciando Sincronização Detalhada (292 projetos). 
-Esta etapa levará aproximadamente 2-3 minutos devido aos limites de segurança da API do Asana para garantir que todos os progressos sejam calculados corretamente.
-
-Por favor, mantenha a aba aberta.`);
-
-      const getCustomFieldValue = (fields: any[], name: string) => {
-        const field = fields?.find(f => f.name.toLowerCase() === name.toLowerCase());
-        return field?.display_value || field?.text_value || field?.number_value || null;
-      };
-
-      // Helper function for delay
-      const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-      let importedCount = 0;
+      alert('Sincronização iniciada em segundo plano no servidor! \n\nOs projetos serão atualizados gradualmente nos próximos minutos. Você pode continuar usando o sistema normalmente.');
       
-      for (const ap of asanaProjects) {
-        const customFields = ap.custom_fields || [];
-        let calculatedProgress = 0;
-
-        try {
-          // Buscando progresso real via contagem de tarefas
-          const taskCountRes = await fetch(`https://app.asana.com/api/1.0/projects/${ap.gid}/task_counts?opt_fields=num_tasks,num_completed_tasks`, {
-            headers: { 'Authorization': `Bearer ${asanaToken}` }
-          });
-          
-          if (taskCountRes.ok) {
-            const { data: counts } = await taskCountRes.json();
-            if (counts && counts.num_tasks > 0) {
-              calculatedProgress = Math.round((counts.num_completed_tasks / counts.num_tasks) * 100);
-            }
-          }
-        } catch (e) {
-          console.error(`Erro ao buscar progresso do projeto ${ap.name}`, e);
-        }
-
-        const newProject = {
-          priority: getCustomFieldValue(customFields, 'Prioridade Projeto') || '---',
-          name: ap.name,
-          client_name: projectToClientName[ap.gid] || '---', 
-          progress: calculatedProgress,
-          status: getCustomFieldValue(customFields, 'Status Projeto') || ap.current_status?.text || '---',
-          is_live: (getCustomFieldValue(customFields, 'Status Projeto') || '').toLowerCase().includes('live') || 
-                   (getCustomFieldValue(customFields, 'Status Projeto') || '').toLowerCase().includes('produção'),
-          solution_hired: getCustomFieldValue(customFields, 'Solução Contratada') || '---',
-          analyst: getCustomFieldValue(customFields, 'Analista Responsável') || ap.owner?.name || '---',
-          whatsapp_group: getCustomFieldValue(customFields, 'Grupo Whatsapp') || '---',
-          monthly_fee: Number(getCustomFieldValue(customFields, 'Mensalidade')) || 0
-        };
-
-        const res = await fetch(`${API_URL}/projects`, {
-           method: 'POST',
-           headers: {
-             'Content-Type': 'application/json',
-             Authorization: `Bearer ${token}`
-           },
-           body: JSON.stringify(newProject)
-        });
-        
-        if (res.ok) {
-          importedCount++;
-          setSyncProgress(importedCount);
-        }
-
-        // PAUSA DE SEGURANÇA (Throttling)
-        await sleep(450);
-      }
-
-      if (importedCount > 0) {
-        alert(`${importedCount} projetos sincronizados com sucesso com progresso real calculado!`);
-        fetchProjects();
-        fetchClients();
-      } else {
-        alert('Nenhum projeto foi importado.');
-      }
+      // Atualiza a lista após alguns segundos para começar a ver as mudanças
+      setTimeout(fetchProjects, 3000);
 
     } catch (error: any) {
       console.error(error);
-      alert('Erro crítico na sincronização: ' + (error.message || error));
+      alert('Erro ao sincronizar: ' + (error.message || error));
     } finally {
       setIsSyncingAsana(false);
     }
