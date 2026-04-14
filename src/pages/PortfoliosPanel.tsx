@@ -248,7 +248,9 @@ const PortfoliosPanel: React.FC = () => {
         alert(`${importedCount} portfólios sincronizados com sucesso!${errorCount > 0 ? ` (${errorCount} falhas de gravação local)` : ''}`);
         fetchData();
       } else {
-        alert('Não foi possível sincronizar os portfólios. Verifique se o servidor da API está respondendo corretamente.');
+        alert(`Falha total na sincronização de portfólios.
+Verifique se você tem permissão de administrador ou se o servidor está online. 
+(Erro detectado: ${errorCount} tentativas falharam no servidor)`);
       }
     } catch (error: any) {
       console.error(error);
@@ -354,7 +356,7 @@ const PortfoliosPanel: React.FC = () => {
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-             <div className="search-bar" style={{ width: '318px', flex: '0 0 318px', margin: 0, height: '42px' }}>
+             <div className="search-bar" style={{ width: '240px', flex: '0 0 240px', margin: 0, height: '42px' }}>
                <Search size={18} className="search-icon" />
                <input 
                  type="text" 
