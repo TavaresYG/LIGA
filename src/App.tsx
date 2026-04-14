@@ -12,6 +12,7 @@ import GoalsPage from './pages/GoalsPage'
 import ProjectsPanel from './pages/ProjectsPanel'
 import PortfoliosPanel from './pages/PortfoliosPanel'
 import ChecklistPage from './pages/ChecklistPage'
+import PointDistributionPage from './pages/PointDistributionPage'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { SavedDoc, FormData } from './types'
 import { Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag, Settings, Receipt, ChevronDown, FileText, Target, Award, Briefcase } from 'lucide-react'
@@ -21,7 +22,7 @@ import './styles/goals.css'
 import BASE_API_URL from './api/config';
 const API_URL = `${BASE_API_URL}/api`;
 
-type View = 'dashboard' | 'form' | 'ranking' | 'loja' | 'extrato' | 'kickoff' | 'goals' | 'projects' | 'portfolios' | 'checklist';
+type View = 'dashboard' | 'form' | 'ranking' | 'loja' | 'extrato' | 'kickoff' | 'goals' | 'projects' | 'portfolios' | 'checklist' | 'distribuicao';
 
 function AppContent() {
   const { user, logout, loading, token } = useAuth();
@@ -223,6 +224,7 @@ function AppContent() {
                     📜 Meu Extrato 
                     {pendingPointsCount > 0 && <span className="nav-pending-badge">!</span>}
                   </button>
+                  <button onClick={() => handleNavClick('distribuicao')}>⚖️ Distribuição de Pontos</button>
                 </div>
               )}
             </div>
@@ -281,6 +283,7 @@ function AppContent() {
         {view === 'projects' && <ProjectsPanel />}
         {view === 'portfolios' && <PortfoliosPanel />}
         {view === 'checklist' && <ChecklistPage />}
+        {view === 'distribuicao' && <PointDistributionPage />}
       </main>
 
       {showAdmin && <AdminPanel role={userRole} onClose={() => setShowAdmin(false)} />}

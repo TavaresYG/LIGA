@@ -28,14 +28,6 @@ interface User {
   username: string;
 }
 
-const CHECKLIST_ITEMS = [
-  'USAR O PADRÃO CORRETO',
-  'REGISTRO DE ALTERAÇÕES',
-  'NOME DO APARELHO',
-  'CODANA UTILIZADO',
-  'VERSÃO DO INFOLAB UTILIZADA',
-  'VERSÃO DO VIU UTILIZADO'
-];
 
 const GoalsPage: React.FC = () => {
   const { token } = useAuth();
@@ -176,98 +168,6 @@ const GoalsPage: React.FC = () => {
         </div>
       </header>
 
-      {/* MANUAL CHECKLIST PANEL */}
-      <div className={`manual-checklist-panel ${userRole === 'member' ? 'checklist-read-only' : ''}`}>
-        <div className="panel-header">
-          <div className="panel-title">
-            <CheckSquare className="panel-icon" size={28} />
-            <h2>Checklist de Manuais</h2>
-          </div>
-          {(userRole === 'admin' || userRole === 'organizador') && (
-            <div className="user-selector">
-              <Users size={18} color="var(--text-muted)" />
-              <label>Membro:</label>
-              <select 
-                value={selectedUserId} 
-                onChange={(e) => setSelectedUserId(e.target.value)}
-              >
-                <option value="">-- Selecionar --</option>
-                {allUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-
-        <div className="checklist-container">
-          {CHECKLIST_ITEMS.map((labelName) => {
-            const isSelected = selectedItems.has(labelName);
-            const canEdit = userRole === 'admin' || userRole === 'organizador';
-            
-            return (
-              <div 
-                key={labelName} 
-                className={`checklist-item ${isSelected ? 'selected' : ''}`}
-                onClick={() => canEdit && toggleItem(labelName)}
-                style={{ cursor: canEdit ? 'pointer' : 'default' }}
-              >
-                <div className="item-left">
-                  {isSelected ? (
-                    <CheckCircle2 size={20} color="var(--accent)" />
-                  ) : (
-                    <div style={{ width: 20, height: 20, border: '2px solid var(--border-color)', borderRadius: '50%', flexShrink: 0 }} />
-                  )}
-                  <span className="item-label" style={{ color: 'var(--text-main)', display: 'inline-block' }}>
-                    {labelName}
-                  </span>
-                </div>
-                
-                {canEdit ? (
-                  <div className="item-points-input" onClick={e => e.stopPropagation()}>
-                    <input 
-                      type="number" 
-                      placeholder="0"
-                      value={checkpointScores[labelName] || ''}
-                      onChange={(e) => handleScoreChange(labelName, e.target.value)}
-                    />
-                    <span>pts</span>
-                  </div>
-                ) : (
-                  <div className="item-points-badge">Ativo</div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {(userRole === 'admin' || userRole === 'organizador') && (
-          <div className="panel-footer">
-            {launchMsg.text && (
-              <span className={`launch-msg ${launchMsg.type}`}>
-                {launchMsg.text}
-              </span>
-            )}
-            <button 
-              className="btn-launch" 
-              onClick={handleLaunchPoints}
-              disabled={launching}
-            >
-              <Send size={18} />
-              {launching ? 'Enviando...' : 'Registrar Pontos'}
-            </button>
-          </div>
-        )}
-
-        {userRole === 'member' && (
-          <div className="panel-footer">
-            <span className="launch-msg" style={{ fontStyle: 'italic', opacity: 0.7 }}>
-              <AlertCircle size={14} style={{ display: 'inline', marginRight: '4px' }} />
-              Itens obrigatórios para a equipe. Solicite o lançamento ao seu líder.
-            </span>
-          </div>
-        )}
-      </div>
 
       <div className="goals-grid">
         {tasks.map(task => {

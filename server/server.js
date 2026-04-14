@@ -943,6 +943,31 @@ app.delete('/api/checklists-all/completed', authenticateToken, async (req, res) 
   }
 });
 
+// ===================== POINT DISTRIBUTION =====================
+
+app.post('/api/admin/manual-points', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
+  const { userId, entries } = req.body;
+  
+  if (!userId || !entries || !Array.isArray(entries)) {
+    return res.status(400).json({ error: 'Dados inválidos para lançamento' });
+  }
+
+  try {
+    // Process each entry in the checklist as a bonus record
+    const promises = entries.map(entry => {
+      return pool.query(
+        'INSERT INTO bonuses (user_id, points, reason, awarded_by) VALUES ($1, $2, $3, $4)',
+        [userId, entry.points, entry.description, req.user.id]
+      );
+    });
+
+    await Promise.all(promises);
+    res.json({ message: 'Distribuição de pontos concluída com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao processar distribuição: ' + err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
