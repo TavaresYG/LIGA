@@ -9,6 +9,7 @@ import ProjectsPanel from './pages/ProjectsPanel'
 import PortfoliosPanel from './pages/PortfoliosPanel'
 import ChecklistPage from './pages/ChecklistPage'
 import PointDistributionPage from './pages/PointDistributionPage'
+import BIPanel from './pages/BIPanel'
 import KickoffForm from './components/KickoffForm'
 import PreKickoffForm from './components/PreKickoffForm'
 import AdminPanel from './components/AdminPanel'
@@ -24,7 +25,7 @@ import './App.css'
 import BASE_API_URL from './api/config';
 const API_URL = `${BASE_API_URL}/api`;
 
-type View = 'dashboard' | 'form' | 'kickoff' | 'ranking' | 'loja' | 'extrato' | 'goals' | 'projects' | 'portfolios' | 'checklist' | 'distribuicao';
+type View = 'dashboard' | 'form' | 'kickoff' | 'ranking' | 'loja' | 'extrato' | 'goals' | 'projects' | 'portfolios' | 'checklist' | 'distribuicao' | 'bi';
 
 function AppContent() {
   const { user, logout, loading, token } = useAuth()
@@ -51,8 +52,8 @@ function AppContent() {
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light')
 
   const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-    admin:      ['dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao'],
-    organizador:['dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'checklist'],
+    admin:      ['dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi'],
+    organizador:['dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'checklist', 'bi'],
     member:     ['dashboard', 'ranking', 'loja', 'extrato', 'goals'],
   };
 
@@ -179,6 +180,7 @@ function AppContent() {
                   <div className="dropdown-menu" onMouseLeave={() => setActiveDropdown(null)}>
                     {hasPerm('projects') && <button onClick={() => handleNavClick('projects')}>📅 Painel dos projetos</button>}
                     {hasPerm('portfolios') && <button onClick={() => handleNavClick('portfolios')}>💼 Painel de portfólios</button>}
+                    {hasPerm('bi') && <button onClick={() => handleNavClick('bi')}>📊 Painel BI</button>}
                   </div>
                 )}
               </div>
@@ -305,6 +307,7 @@ function AppContent() {
         {view === 'portfolios' && <PortfoliosPanel />}
         {view === 'checklist' && <ChecklistPage />}
         {view === 'distribuicao' && <PointDistributionPage />}
+        {view === 'bi' && <BIPanel />}
       </main>
 
       {showAdmin && <AdminPanel role={userRole} onClose={() => setShowAdmin(false)} />}
