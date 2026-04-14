@@ -439,27 +439,6 @@ Verifique se você tem permissão de administrador ou se o servidor está online
 
       <div className="filter-row" style={{ flexWrap: 'nowrap', gap: '0.5rem', justifyContent: 'space-between', overflowX: 'auto', paddingBottom: '0.5rem' }}>
         <div className="filters-group" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', alignItems: 'center' }}>
-          
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            {isSearchVisible && (
-              <input 
-                type="text" 
-                autoFocus
-                placeholder="Pesquisar..." 
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ width: '160px', padding: '0.4rem 0.6rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.8rem', marginRight: '0.4rem', outline: 'none', boxShadow: '0 0 10px rgba(255,193,7,0.1)' }}
-              />
-            )}
-            <button 
-              onClick={() => setIsSearchVisible(!isSearchVisible)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.4rem', display: 'flex', alignItems: 'center' }}
-              title="Pesquisar"
-            >
-              <Search size={22} color="#FFC107" strokeWidth={3} />
-            </button>
-          </div>
-
           <select 
             className="filter-select" 
             value={filterAnalyst} 
