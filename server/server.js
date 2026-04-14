@@ -968,6 +968,91 @@ app.post('/api/admin/manual-points', authenticateToken, requireOrganizadorOrAdmi
   }
 });
 
+// ===================== CUSTOM ROLES & PERMISSIONS =====================
+
+// Get all roles
+app.get('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const roles = await pool.query('SELECT * FROM custom_roles ORDER BY name');
+    const permissions = await pool.query('SELECT * FROM role_permissions');
+    
+    // Group permissions by role
+    const rolesWithPerms = roles.rows.map(role => ({
+      ...role,
+      permissions: permissions.rows.filter(p => p.role_id === role.id).map(p => p.view_name)
+    }));
+    
+    res.json(rolesWithPerms);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create/Update a role with its permissions
+app.post('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
+  const { name, permissions } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Insert or update role
+    const roleRes = await client.query(
+      'INSERT INTO custom_roles (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = $1 RETURNING id',
+      [name]
+    );
+    const roleId = roleRes.rows[0].id;
+    
+    // Clear old permissions and set new ones
+    await client.query('DELETE FROM role_permissions WHERE role_id = $1', [roleId]);
+    if (permissions && permissions.length > 0) {
+      const inserts = permissions.map(view => 
+        client.query('INSERT INTO role_permissions (role_id, view_name) VALUES ($1, $2)', [roleId, view])
+      );
+      await Promise.all(inserts);
+    }
+    
+    await client.query('COMMIT');
+    res.json({ id: roleId, name, permissions });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Get current user permissions
+app.get('/api/me/permissions', authenticateToken, async (req, res) => {
+  try {
+    // 1. Get user direct role
+    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
+    const roleName = roleRes.rows.length > 0 ? roleRes.rows[0].role : 'member';
+    
+    // 2. If it's a default/legacy role, we might give default permissions
+    // 3. Check if it's a custom role
+    const customRoleRes = await pool.query(`
+      SELECT rp.view_name FROM role_permissions rp
+      JOIN custom_roles cr ON rp.role_id = cr.id
+      WHERE cr.name = $1
+    `, [roleName]);
+    
+    if (customRoleRes.rows.length > 0) {
+      return res.json({ permissions: customRoleRes.rows.map(r => r.view_name) });
+    }
+    
+    // Default fallback permissions for legacy roles
+    const defaults = {
+      'admin': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao'],
+      'organizador': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals'],
+      'member': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals']
+    };
+    
+    res.json({ permissions: defaults[roleName] || defaults['member'] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
