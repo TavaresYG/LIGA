@@ -67,14 +67,15 @@ function AppContent() {
         if (data && data.permissions && data.permissions.length > 0) {
           setPermissions(data.permissions);
         }
-        // else: keep empty, will fall back via hasPerm below
       })
       .catch(() => {});
 
     // Fetch role
     fetch(`${API_URL}/me/role`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => res.json())
-      .then(data => setUserRole(data.role || 'member'))
+      .then(data => {
+        setUserRole(data.role || 'member');
+      })
       .catch(() => {});
 
     // Fetch statement for pending badge
@@ -108,7 +109,8 @@ function AppContent() {
   // If permissions not yet loaded from API, fall back to role defaults
   const hasPerm = (v: string) => {
     if (permissions.length > 0) return permissions.includes(v);
-    return (DEFAULT_PERMISSIONS[userRole] || DEFAULT_PERMISSIONS['member']).includes(v);
+    const roleKey = (userRole || 'member').toLowerCase();
+    return (DEFAULT_PERMISSIONS[roleKey] || DEFAULT_PERMISSIONS['member']).includes(v);
   };
   const canAccessAdmin = userRole === 'admin' || userRole === 'organizador';
 
@@ -182,10 +184,10 @@ function AppContent() {
             )}
 
             {/* PAINEL DROPDOWN */}
-            {(hasPerm('projects') || hasPerm('portfolios')) && (
+            {(hasPerm('projects') || hasPerm('portfolios') || hasPerm('bi')) && (
               <div className="nav-dropdown">
                 <button
-                  className={`nav-btn ${(view === 'projects' || view === 'portfolios') ? 'active' : ''}`}
+                  className={`nav-btn ${(view === 'projects' || view === 'portfolios' || view === 'bi') ? 'active' : ''}`}
                   onMouseEnter={() => setActiveDropdown('painel')}
                   onClick={() => setActiveDropdown(activeDropdown === 'painel' ? null : 'painel')}
                 >
