@@ -705,6 +705,35 @@ app.get('/api/me/statement', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/users/:id/statement — extrato de outro usuário (apenas admin/organizador)
+app.get('/api/users/:id/statement', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const tasks = await pool.query(`
+      SELECT tc.id, 'task' AS type, tt.name AS description,
+        tc.points_awarded AS points, tc.approved_at AS date, tc.notes, tc.status
+      FROM task_completions tc
+      LEFT JOIN task_types tt ON tt.id = tc.task_type_id
+      WHERE tc.user_id = $1 AND (tc.status = 'approved' OR tc.status = 'pending')
+    `, [userId]);
+
+    const bonuses = await pool.query(`
+      SELECT b.id, 'bonus' AS type,
+        COALESCE('Bônus: ' || b.reason, 'Bônus de Equipe') AS description,
+        b.points, b.created_at AS date, b.reason AS notes, 'approved' AS status
+      FROM bonuses b WHERE b.user_id = $1
+    `, [userId]);
+
+    const all = [...tasks.rows, ...bonuses.rows]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    res.json(all);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar extrato: ' + err.message });
+  }
+});
+
 // ===================== PROJECTS =====================
 
 // ===================== CLIENTS =====================

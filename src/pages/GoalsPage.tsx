@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Target, CheckCircle2, TrendingUp, Award, Users, CheckSquare, Send, AlertCircle } from 'lucide-react';
+import { Target, CheckCircle2, TrendingUp, Award, Users, User, ChevronDown } from 'lucide-react';
 import '../styles/goals.css';
 
 import BASE_API_URL from '../api/config';
@@ -20,141 +20,97 @@ interface StatementEntry {
   description: string;
   points: number;
   date: string;
+  status?: string;
 }
 
-interface User {
+interface TeamUser {
   id: string;
   name: string;
   username: string;
 }
-
 
 const GoalsPage: React.FC = () => {
   const { token } = useAuth();
   const [tasks, setTasks] = useState<TaskType[]>([]);
   const [completions, setCompletions] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingUser, setLoadingUser] = useState(false);
   const [userRole, setUserRole] = useState<string>('member');
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [checkpointScores, setCheckpointScores] = useState<Record<string, number>>({});
-  const [launching, setLaunching] = useState(false);
-  const [launchMsg, setLaunchMsg] = useState<{ text: string; type: 'success' | 'error' | '' }>({ text: '', type: '' });
+  const [allUsers, setAllUsers] = useState<TeamUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [selectedUserName, setSelectedUserName] = useState<string>('');
+
+  const isManagerial = userRole === 'admin' || userRole === 'organizador';
 
   useEffect(() => {
     if (!token) return;
 
-    const fetchData = async () => {
+    const fetchInitial = async () => {
       try {
         const headers = { Authorization: `Bearer ${token}` };
-        
-        // Use individual try-catches or selective Promise.all to prevent one failure from killing everything
-        const [resTasks, resStatement, resRole, resUsers] = await Promise.all([
-          fetch(`${API_URL}/task-types`, { headers }).catch(e => ({ ok: false, error: e })),
-          fetch(`${API_URL}/me/statement`, { headers }).catch(e => ({ ok: false, error: e })),
-          fetch(`${API_URL}/me/role`, { headers }).catch(e => ({ ok: false, error: e })),
-          fetch(`${API_URL}/users`, { headers }).catch(e => ({ ok: false, error: e }))
+
+        const [resTasks, resRole] = await Promise.all([
+          fetch(`${API_URL}/task-types`, { headers }),
+          fetch(`${API_URL}/me/role`, { headers }),
         ]);
 
-        if (resTasks && 'ok' in resTasks && resTasks.ok) {
-          const taskData: TaskType[] = await (resTasks as Response).json();
-          setTasks(taskData);
-        }
+        if (resTasks.ok) setTasks(await resTasks.json());
+        
+        if (resRole.ok) {
+          const roleData = await resRole.json();
+          const role = roleData.role || 'member';
+          setUserRole(role);
 
-        if (resStatement && 'ok' in resStatement && resStatement.ok) {
-          const statementData: StatementEntry[] = await (resStatement as Response).json();
-          const counts: Record<string, number> = {};
-          statementData.forEach(entry => {
-            if (entry.type === 'task') {
-              counts[entry.description] = (counts[entry.description] || 0) + 1;
-            }
-          });
-          setCompletions(counts);
-        }
-
-        if (resRole && 'ok' in resRole && resRole.ok) {
-          const roleData = await (resRole as Response).json();
-          setUserRole(roleData.role || 'member');
-        }
-
-        if (resUsers && 'ok' in resUsers && resUsers.ok) {
-          const userData: User[] = await (resUsers as Response).json();
-          setAllUsers(userData);
+          // If member: load own completions immediately
+          if (role === 'member') {
+            const resStmt = await fetch(`${API_URL}/me/statement`, { headers });
+            if (resStmt.ok) buildCompletions(await resStmt.json());
+          } else {
+            // Admin/Org: load user list
+            const resUsers = await fetch(`${API_URL}/users`, { headers });
+            if (resUsers.ok) setAllUsers(await resUsers.json());
+          }
         }
       } catch (err) {
-        console.error('Error in GoalsPage fetchData:', err);
+        console.error('GoalsPage error:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchInitial();
   }, [token]);
 
-  const handleLaunchPoints = async () => {
-    if (!selectedUserId) {
-      setLaunchMsg({ text: 'Selecione um membro da equipe.', type: 'error' });
-      return;
-    }
-
-    if (selectedItems.size === 0) {
-      setLaunchMsg({ text: 'Selecione pelo menos um item do manual.', type: 'error' });
-      return;
-    }
-
-    setLaunching(true);
-    setLaunchMsg({ text: '', type: '' });
-
-    const batchCompletions = Array.from(selectedItems).map(itemName => {
-      const task = tasks.find(t => t.name === itemName);
-      return {
-        taskTypeId: task?.id,
-        points: checkpointScores[itemName] || 0
-      };
-    });
-
-    try {
-      const res = await fetch(`${API_URL}/task-completions/batch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          userId: selectedUserId,
-          completions: batchCompletions,
-          notes: 'Lançamento via Checklist de Manuais'
-        })
-      });
-
-      if (res.ok) {
-        setLaunchMsg({ text: '✅ Pontos lançados com sucesso! Aguardando aprovação.', type: 'success' });
-        setSelectedItems(new Set());
-        setCheckpointScores({});
-        setSelectedUserId('');
-      } else {
-        const err = await res.json();
-        setLaunchMsg({ text: '❌ Erro: ' + (err.error || 'Falha ao lançar'), type: 'error' });
+  const buildCompletions = (statement: StatementEntry[]) => {
+    const counts: Record<string, number> = {};
+    statement.forEach(entry => {
+      if (entry.type === 'task') {
+        counts[entry.description] = (counts[entry.description] || 0) + 1;
       }
+    });
+    setCompletions(counts);
+  };
+
+  const loadUserCompletions = async (userId: string) => {
+    if (!userId) { setCompletions({}); setSelectedUserName(''); return; }
+    setLoadingUser(true);
+    try {
+      const res = await fetch(`${API_URL}/users/${userId}/statement`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) buildCompletions(await res.json());
+      const u = allUsers.find(u => u.id === userId);
+      setSelectedUserName(u ? u.name : '');
     } catch (err) {
-      setLaunchMsg({ text: '❌ Falha na conexão com o servidor', type: 'error' });
+      console.error(err);
     } finally {
-      setLaunching(false);
-      setTimeout(() => setLaunchMsg({ text: '', type: '' }), 5000);
+      setLoadingUser(false);
     }
   };
 
-  const toggleItem = (item: string) => {
-    const next = new Set(selectedItems);
-    if (next.has(item)) next.delete(item);
-    else next.add(item);
-    setSelectedItems(next);
-  };
-
-  const handleScoreChange = (item: string, val: string) => {
-    const score = parseInt(val) || 0;
-    setCheckpointScores(prev => ({ ...prev, [item]: score }));
+  const handleUserChange = (userId: string) => {
+    setSelectedUserId(userId);
+    loadUserCompletions(userId);
   };
 
   if (loading) return <div className="loading">Carregando metas...</div>;
@@ -164,57 +120,148 @@ const GoalsPage: React.FC = () => {
       <header className="goals-header">
         <div className="title-area">
           <h1>🎯 Metas Ativas</h1>
-          <p>Acompanhe o seu progresso e os pontos disponíveis.</p>
+          <p>
+            {isManagerial
+              ? 'Selecione um membro para visualizar o progresso individual nas metas.'
+              : 'Acompanhe o seu progresso e os pontos disponíveis.'}
+          </p>
         </div>
       </header>
 
+      {/* Seletor de membro — visível apenas para Admin e Organizador */}
+      {isManagerial && (
+        <div style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '1rem',
+          padding: '1.25rem 1.5rem',
+          marginBottom: '2rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent)', fontWeight: '700' }}>
+            <Users size={20} />
+            <span>Visualizar progresso de:</span>
+          </div>
 
-      <div className="goals-grid">
-        {tasks.map(task => {
-          const count = completions[task.name] || 0;
-          return (
-            <div key={task.id} className="goal-card">
-              <div className="goal-icon">
-                <Target size={24} />
-              </div>
-              <div className="goal-info">
-                <h3>{task.name}</h3>
-                <div className="goal-meta">
-                  <span className="badge-points">{task.points} pts</span>
-                  <span className="badge-type">{task.tipo}</span>
+          <div style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            flex: 1,
+            minWidth: '220px',
+            background: 'var(--bg-hover)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '0.75rem',
+            padding: '0.5rem 1rem',
+          }}>
+            <User size={16} color="var(--text-muted)" style={{ marginRight: '0.5rem', flexShrink: 0 }} />
+            <select
+              value={selectedUserId}
+              onChange={e => handleUserChange(e.target.value)}
+              style={{
+                background: 'none',
+                border: 'none',
+                outline: 'none',
+                color: 'var(--text-main)',
+                fontSize: '0.95rem',
+                fontWeight: '600',
+                width: '100%',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="">— Selecione um membro —</option>
+              {allUsers.map(u => (
+                <option key={u.id} value={u.id}>{u.name} (@{u.username})</option>
+              ))}
+            </select>
+          </div>
+
+          {selectedUserName && (
+            <div style={{
+              padding: '0.5rem 1rem',
+              background: 'var(--accent-light, rgba(22,163,74,0.1))',
+              borderRadius: '0.75rem',
+              fontSize: '0.85rem',
+              fontWeight: '700',
+              color: 'var(--accent)',
+              border: '1px solid var(--accent)',
+            }}>
+              👤 {selectedUserName}
+            </div>
+          )}
+
+          {loadingUser && (
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Carregando...</span>
+          )}
+        </div>
+      )}
+
+      {/* Lista de metas — para membros sempre visível, para admin/org só após selecionar */}
+      {(!isManagerial || selectedUserId) ? (
+        <div className="goals-grid">
+          {tasks.map(task => {
+            const count = completions[task.name] || 0;
+            return (
+              <div key={task.id} className="goal-card">
+                <div className="goal-icon">
+                  <Target size={24} />
                 </div>
-                {task.validation_rule_name && (
-                  <p className="goal-rule">Regra: <span>{task.validation_rule_name}</span></p>
-                )}
-              </div>
-              <div className="goal-progress">
-                <div className="progress-stat">
-                  <TrendingUp size={14} />
-                  <span>Concluído <strong>{count}</strong> vezes</span>
-                </div>
-                <div className="progress-bar-container">
-                  <div 
-                    className="progress-bar-fill" 
-                    style={{ width: count > 0 ? '100%' : '5%' }}
-                  ></div>
-                </div>
-                <div className="progress-footer">
-                  {count > 0 ? (
-                    <span className="status-done"><CheckCircle2 size={12} /> Ativo no Extrato</span>
-                  ) : (
-                    <span className="status-pending">Aguardando início</span>
+                <div className="goal-info">
+                  <h3>{task.name}</h3>
+                  <div className="goal-meta">
+                    <span className="badge-points">{task.points} pts</span>
+                    <span className="badge-type">{task.tipo}</span>
+                  </div>
+                  {task.validation_rule_name && (
+                    <p className="goal-rule">Regra: <span>{task.validation_rule_name}</span></p>
                   )}
                 </div>
+                <div className="goal-progress">
+                  <div className="progress-stat">
+                    <TrendingUp size={14} />
+                    <span>Concluído <strong>{count}</strong> {count === 1 ? 'vez' : 'vezes'}</span>
+                  </div>
+                  <div className="progress-bar-container">
+                    <div
+                      className="progress-bar-fill"
+                      style={{ width: count > 0 ? '100%' : '5%' }}
+                    ></div>
+                  </div>
+                  <div className="progress-footer">
+                    {count > 0 ? (
+                      <span className="status-done"><CheckCircle2 size={12} /> Ativo no Extrato</span>
+                    ) : (
+                      <span className="status-pending">Aguardando início</span>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
 
-      {tasks.length === 0 && (
-        <div className="empty-state">
-          <Award size={48} />
-          <p>Nenhuma meta ativa no momento. Fique de olho!</p>
+          {tasks.length === 0 && (
+            <div className="empty-state">
+              <Award size={48} />
+              <p>Nenhuma meta ativa no momento.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Estado vazio — admin não selecionou membro ainda */
+        <div style={{
+          textAlign: 'center',
+          padding: '4rem 2rem',
+          color: 'var(--text-muted)',
+          background: 'var(--bg-card)',
+          borderRadius: '1.25rem',
+          border: '1px dashed var(--border-color)'
+        }}>
+          <Users size={56} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+          <p style={{ fontSize: '1.1rem', fontWeight: '600' }}>Selecione um membro acima</p>
+          <p style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>para visualizar o progresso individual nas metas.</p>
         </div>
       )}
     </div>
