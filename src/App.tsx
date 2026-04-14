@@ -16,7 +16,6 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { SavedDoc, FormData } from './types'
 import { Sun, Moon, LogOut, User, LayoutDashboard, Trophy, ShoppingBag, Settings, Receipt, ChevronDown, FileText, Target, Award, Briefcase, ClipboardList, Scale } from 'lucide-react'
 import './App.css'
-import './styles/themes.css'
 
 import BASE_API_URL from './api/config';
 const API_URL = `${BASE_API_URL}/api`;
