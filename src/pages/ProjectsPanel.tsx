@@ -468,8 +468,8 @@ Por favor, mantenha a aba aberta.`);
         </div>
       )}
       
-      <div className="projects-header">
-        <div>
+      <div className="projects-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div style={{ flexShrink: 0 }}>
           <div className="projects-title">
             <Activity size={28} color="var(--accent)" />
             Monitoramento de Projetos
@@ -477,7 +477,7 @@ Por favor, mantenha a aba aberta.`);
           <p className="projects-subtitle">Acompanhe em tempo real o andamento e a saúde das implantações e entregas ativas.</p>
         </div>
         
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', justifyContent: 'flex-end', flex: 1 }}>
           
           <div style={{ display: 'flex', alignItems: 'center', transition: 'all 0.3s ease' }}>
             {isSearchVisible && (

@@ -345,8 +345,8 @@ Verifique se você tem permissão de administrador ou se o servidor está online
   return (
     <div className="projects-page fade-in">
       
-      <div className="projects-header">
-        <div>
+      <div className="projects-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div style={{ flexShrink: 0 }}>
           <div className="projects-title">
             <Building2 size={28} color="var(--accent)" />
             Painel de Portfólios
@@ -354,7 +354,7 @@ Verifique se você tem permissão de administrador ou se o servidor está online
           <p className="projects-subtitle">Gerencie e cadastre todos os seus clientes e centralize o vínculo com as implantações.</p>
         </div>
         
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', justifyContent: 'flex-end', flex: 1 }}>
           
           <div style={{ display: 'flex', alignItems: 'center', transition: 'all 0.3s ease' }}>
             {isSearchVisible && (
