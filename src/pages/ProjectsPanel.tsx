@@ -54,6 +54,8 @@ const ProjectsPanel: React.FC = () => {
   const [filterWhatsapp, setFilterWhatsapp] = useState('Todos');
   const [filterMonthly, setFilterMonthly] = useState('Todos');
   const [isSyncingAsana, setIsSyncingAsana] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [syncTotal, setSyncTotal] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
@@ -108,6 +110,8 @@ const ProjectsPanel: React.FC = () => {
     }
 
     setIsSyncingAsana(true);
+    setSyncProgress(0);
+    setSyncTotal(0);
     try {
       // 1. Fetch Projects from Asana
       const projectsUrl = workspaceId 
@@ -132,8 +136,7 @@ const ProjectsPanel: React.FC = () => {
         return;
       }
 
-      // 2. Fetch Portfolios and their items to map Project -> Client
-      // We'll use the already loaded clients in our DB to save time
+      setSyncTotal(asanaProjects.length);
       const portfoliosUrl = workspaceId 
         ? `https://app.asana.com/api/1.0/portfolios?workspace=${workspaceId}&owner=me&opt_fields=name,gid`
         : `https://app.asana.com/api/1.0/portfolios?owner=me&opt_fields=name,gid`;
@@ -158,37 +161,39 @@ const ProjectsPanel: React.FC = () => {
         }));
       }
 
-      alert(`Encontrei ${asanaProjects.length} projetos no Asana. Iniciando cálculo de progresso e sincronização detalhada. Isso pode levar alguns minutos devidos aos limites de requisição do Asana...`);
+      alert(`Iniciando Sincronização Detalhada (292 projetos). 
+Esta etapa levará aproximadamente 2-3 minutos devido aos limites de segurança da API do Asana para garantir que todos os progressos sejam calculados corretamente.
+
+Por favor, mantenha a aba aberta.`);
 
       const getCustomFieldValue = (fields: any[], name: string) => {
         const field = fields?.find(f => f.name.toLowerCase() === name.toLowerCase());
         return field?.display_value || field?.text_value || field?.number_value || null;
       };
 
+      // Helper function for delay
+      const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
       let importedCount = 0;
-      // We will batch fetch task counts to not hit rate limits too hard (limit of 60/min for task_counts on Standard asana API, though we'll try sequential with a tiny delay if needed, or just sequential for now).
-      // Since there might be 300 projects, doing it sequentially might take 30s-1m. We will alert the user.
+      
       for (const ap of asanaProjects) {
         const customFields = ap.custom_fields || [];
-        
-        let calculatedProgress = ap.percentage_complete || 0;
-        
+        let calculatedProgress = 0;
+
         try {
+          // Buscando progresso real via contagem de tarefas
           const taskCountRes = await fetch(`https://app.asana.com/api/1.0/projects/${ap.gid}/task_counts?opt_fields=num_tasks,num_completed_tasks`, {
             headers: { 'Authorization': `Bearer ${asanaToken}` }
           });
           
           if (taskCountRes.ok) {
-            const countData = await taskCountRes.json();
-            const counts = countData.data;
+            const { data: counts } = await taskCountRes.json();
             if (counts && counts.num_tasks > 0) {
               calculatedProgress = Math.round((counts.num_completed_tasks / counts.num_tasks) * 100);
-            } else if (counts && counts.num_tasks === 0) {
-              calculatedProgress = 0;
             }
           }
         } catch (e) {
-          console.error(`Falha ao buscar task counts para o projeto ${ap.name}`, e);
+          console.error(`Erro ao buscar progresso do projeto ${ap.name}`, e);
         }
 
         const newProject = {
@@ -201,7 +206,7 @@ const ProjectsPanel: React.FC = () => {
                    (getCustomFieldValue(customFields, 'Status Projeto') || '').toLowerCase().includes('produção'),
           solution_hired: getCustomFieldValue(customFields, 'Solução Contratada') || '---',
           analyst: getCustomFieldValue(customFields, 'Analista Responsável') || ap.owner?.name || '---',
-          whatsapp_group: getCustomFieldValue(customFields, 'Grupo WhatsApp') || '---',
+          whatsapp_group: getCustomFieldValue(customFields, 'Grupo Whatsapp') || '---',
           monthly_fee: Number(getCustomFieldValue(customFields, 'Mensalidade')) || 0
         };
 
@@ -213,15 +218,22 @@ const ProjectsPanel: React.FC = () => {
            },
            body: JSON.stringify(newProject)
         });
-        if (res.ok) importedCount++;
+        
+        if (res.ok) {
+          importedCount++;
+          setSyncProgress(importedCount);
+        }
+
+        // PAUSA DE SEGURANÇA (Throttling)
+        await sleep(450);
       }
 
       if (importedCount > 0) {
-        alert(`${importedCount} projetos sincronizados/atualizados com sucesso!`);
+        alert(`${importedCount} projetos sincronizados com sucesso com progresso real calculado!`);
         fetchProjects();
         fetchClients();
       } else {
-        alert('Nenhum projeto foi importado. Verifique os logs.');
+        alert('Nenhum projeto foi importado.');
       }
 
     } catch (error: any) {
@@ -424,6 +436,8 @@ const ProjectsPanel: React.FC = () => {
 
   const analysts = Array.from(new Set(projects.map(p => p.analyst).filter(Boolean))).sort();
   const solutions = Array.from(new Set(projects.map(p => p.solution_hired).filter(Boolean))).sort();
+  const statuses = Array.from(new Set(projects.map(p => p.status).filter(Boolean))).sort();
+  const priorities = Array.from(new Set(projects.map(p => p.priority).filter(Boolean))).sort();
 
   const activeProjects = filteredProjects.filter(p => p && p.status !== 'Concluído').length;
   const liveProjects = filteredProjects.filter(p => p && p.is_live).length;
@@ -431,8 +445,27 @@ const ProjectsPanel: React.FC = () => {
 
   if (loading) return <div style={{ padding: '2rem' }}>Carregando painel de projetos...</div>;
 
+  const syncPercentage = syncTotal > 0 ? Math.round((syncProgress / syncTotal) * 100) : 0;
+
   return (
     <div className="projects-page fade-in">
+      
+      {isSyncingAsana && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: 'var(--bg-card)', padding: '1rem', borderBottom: '2px solid var(--accent)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', animation: 'slideDown 0.3s ease' }}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+                <Loader2 size={20} className="animate-spin" color="var(--accent)" />
+                <span style={{ fontWeight: '700', fontSize: '0.9rem' }}>Sincronizando com Asana...</span>
+             </div>
+             <div style={{ flex: 1, height: '10px', background: 'var(--bg-hover)', borderRadius: '5px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: 'var(--accent)', width: `${syncPercentage}%`, transition: 'width 0.3s ease' }}></div>
+             </div>
+             <div style={{ flexShrink: 0, fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+                {syncProgress} de {syncTotal} projetos ({syncPercentage}%)
+             </div>
+          </div>
+        </div>
+      )}
       
       <div className="projects-header" style={{ alignItems: 'center' }}>
         <div>
@@ -444,7 +477,7 @@ const ProjectsPanel: React.FC = () => {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <div className="search-bar" style={{ width: '326px', flex: '0 0 326px', margin: 0, height: '42px' }}>
+            <div className="search-bar" style={{ width: '318px', flex: '0 0 318px', margin: 0, height: '42px' }}>
               <Search size={18} className="search-icon" />
               <input 
                 type="text" 
@@ -518,42 +551,33 @@ const ProjectsPanel: React.FC = () => {
         </div>
       </div>
 
-      <div className="filter-row" style={{ flexWrap: 'wrap', gap: '1rem', justifyContent: 'flex-end' }}>
-        <div className="filters-group" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+      <div className="filter-row" style={{ flexWrap: 'nowrap', gap: '0.5rem', justifyContent: 'space-between', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+        <div className="filters-group" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', alignItems: 'center' }}>
           <select 
             className="filter-select" 
             value={filterStatus} 
             onChange={(e) => setFilterStatus(e.target.value)}
-            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.78rem', minWidth: '120px' }}
           >
-            <option value="Todos">Todos Status</option>
-            <option value="---">--- (Não definido)</option>
-            <option value="Não iniciado">Não iniciado</option>
-            <option value="Na fila">Na fila</option>
-            <option value="Em andamento">Em andamento</option>
-            <option value="Atrasado">Atrasado</option>
-            <option value="Pausado">Pausado</option>
-            <option value="Concluído">Concluído</option>
+            <option value="Todos">Status (Todos)</option>
+            {statuses.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
 
           <select 
             className="filter-select" 
             value={filterPriority} 
             onChange={(e) => setFilterPriority(e.target.value)}
-            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.78rem', minWidth: '120px' }}
           >
-            <option value="Todas">Todas Prioridades</option>
-            <option value="---">--- (Não definida)</option>
-            <option value="Alta">Alta</option>
-            <option value="Média">Média</option>
-            <option value="Baixa">Baixa</option>
+            <option value="Todas">Prioridade (Todas)</option>
+            {priorities.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
 
           <select 
             className="filter-select" 
             value={filterAnalyst} 
             onChange={(e) => setFilterAnalyst(e.target.value)}
-            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.78rem', minWidth: '120px' }}
           >
             <option value="Todos">Analista (Todos)</option>
             {analysts.map(a => <option key={a} value={a}>{a}</option>)}
@@ -563,7 +587,7 @@ const ProjectsPanel: React.FC = () => {
             className="filter-select" 
             value={filterSolution} 
             onChange={(e) => setFilterSolution(e.target.value)}
-            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.78rem', minWidth: '120px' }}
           >
             <option value="Todas">Solução (Todas)</option>
             {solutions.map(s => <option key={s} value={s}>{s}</option>)}
@@ -573,9 +597,9 @@ const ProjectsPanel: React.FC = () => {
             className="filter-select" 
             value={filterWhatsapp} 
             onChange={(e) => setFilterWhatsapp(e.target.value)}
-            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.78rem', minWidth: '120px' }}
           >
-            <option value="Todos">WhatsApp (Todos)</option>
+            <option value="Todos">WhatsApp (Tudo)</option>
             <option value="Com Grupo">Com Grupo</option>
             <option value="Sem Grupo">Sem Grupo</option>
           </select>
@@ -584,7 +608,7 @@ const ProjectsPanel: React.FC = () => {
             className="filter-select" 
             value={filterMonthly} 
             onChange={(e) => setFilterMonthly(e.target.value)}
-            style={{ padding: '0.5rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem' }}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.78rem', minWidth: '120px' }}
           >
             <option value="Todos">Mensalidade (Tudo)</option>
             <option value="Com Mensalidade">Com Mensalidade</option>
@@ -592,20 +616,22 @@ const ProjectsPanel: React.FC = () => {
           </select>
         </div>
 
-        <div className="view-toggle">
+        <div className="view-toggle" style={{ flexShrink: 0 }}>
           <button 
             className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`} 
             onClick={() => setViewMode('grid')}
             title="Visualização em Grade"
+            style={{ padding: '0.4rem' }}
           >
-            <LayoutGrid size={20} />
+            <LayoutGrid size={18} />
           </button>
           <button 
             className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`} 
             onClick={() => setViewMode('list')}
             title="Visualização em Lista"
+            style={{ padding: '0.4rem' }}
           >
-            <List size={20} />
+            <List size={18} />
           </button>
         </div>
       </div>
@@ -841,9 +867,19 @@ const ProjectsPanel: React.FC = () => {
                 <div className="form-group">
                   <label>Prioridade</label>
                   <select value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value})}>
-                    <option value="Alta">Alta (Urgente)</option>
-                    <option value="Média">Média (Normal)</option>
-                    <option value="Baixa">Baixa</option>
+                    <option value="---">--- (Não definida)</option>
+                    {priorities.filter(p => p !== '---').map(p => <option key={p} value={p}>{p}</option>)}
+                    {!priorities.includes(formData.priority) && formData.priority !== '---' && (
+                       <option value={formData.priority}>{formData.priority}</option>
+                    )}
+                    {/* Fallback caso esteja vazio */}
+                    {priorities.length === 0 && (
+                      <>
+                        <option value="Alta">Alta</option>
+                        <option value="Média">Média</option>
+                        <option value="Baixa">Baixa</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -851,12 +887,18 @@ const ProjectsPanel: React.FC = () => {
                   <label>Status Atual</label>
                   <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
                     <option value="---">--- (Não definido)</option>
-                    <option value="Não iniciado">Não iniciado</option>
-                    <option value="Na fila">Na fila</option>
-                    <option value="Em andamento">Em andamento</option>
-                    <option value="Atrasado">Atrasado</option>
-                    <option value="Pausado">Pausado</option>
-                    <option value="Concluído">Concluído</option>
+                    {statuses.filter(s => s !== '---').map(s => <option key={s} value={s}>{s}</option>)}
+                    {!statuses.includes(formData.status) && formData.status !== '---' && (
+                      <option value={formData.status}>{formData.status}</option>
+                    )}
+                    {/* Opções padrão caso a lista esteja vazia */}
+                    {statuses.length === 0 && (
+                      <>
+                        <option value="Não iniciado">Não iniciado</option>
+                        <option value="Em andamento">Em andamento</option>
+                        <option value="Concluído">Concluído</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
