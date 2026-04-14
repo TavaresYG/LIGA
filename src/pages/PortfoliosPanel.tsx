@@ -354,8 +354,8 @@ Verifique se você tem permissão de administrador ou se o servidor está online
           <p className="projects-subtitle">Gerencie e cadastre todos os seus clientes e centralize o vínculo com as implantações.</p>
         </div>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div style={{ flex: 1, width: '100%' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
              <div className="search-bar" style={{ width: '240px', flex: '0 0 240px', margin: 0, height: '42px' }}>
                <Search size={18} className="search-icon" />
                <input 
@@ -367,40 +367,42 @@ Verifique se você tem permissão de administrador ou se o servidor está online
                />
              </div>
 
-             <button 
-               className="btn-add-project" 
-               style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
-               onClick={handleSyncAsana}
-               disabled={isSyncingAsana}
-             >
-               {isSyncingAsana ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} 
-               Asana
-             </button>
-             
-             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
-             <button 
-               className="btn-add-project" 
-               style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
-               onClick={() => fileInputRef.current?.click()}
-             >
-               <Upload size={16} /> Importar Planilha
-             </button>
+             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+               <button 
+                 className="btn-add-project" 
+                 style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
+                 onClick={handleSyncAsana}
+                 disabled={isSyncingAsana}
+               >
+                 {isSyncingAsana ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} 
+                 Asana
+               </button>
+               
+               <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
+               <button 
+                 className="btn-add-project" 
+                 style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
+                 onClick={() => fileInputRef.current?.click()}
+               >
+                 <Upload size={16} /> Importar Planilha
+               </button>
 
-             <button 
-               className="btn-add-project" 
-               style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
-               onClick={handleDownloadTemplate}
-             >
-               <Download size={16} /> Modelo XLS
-             </button>
+               <button 
+                 className="btn-add-project" 
+                 style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
+                 onClick={handleDownloadTemplate}
+               >
+                 <Download size={16} /> Modelo XLS
+               </button>
 
-             <button className="btn-add-project" onClick={() => handleOpenModal()}>
-               <Plus size={18} /> Novo Portfólio
-             </button>
+               <button className="btn-add-project" onClick={() => handleOpenModal()}>
+                 <Plus size={18} /> Novo Portfólio
+               </button>
 
-             <button className="btn-add-project btn-danger" onClick={handleDeleteAll}>
-               <Trash2 size={18} /> Limpar Todos
-             </button>
+               <button className="btn-add-project btn-danger" onClick={handleDeleteAll}>
+                 <Trash2 size={18} /> Limpar Todos
+               </button>
+             </div>
           </div>
         </div>
       </div>

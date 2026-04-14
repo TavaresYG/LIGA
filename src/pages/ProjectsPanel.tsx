@@ -475,19 +475,20 @@ Por favor, mantenha a aba aberta.`);
           </div>
           <p className="projects-subtitle">Acompanhe em tempo real o andamento e a saúde das implantações e entregas ativas.</p>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <div className="search-bar" style={{ width: '240px', flex: '0 0 240px', margin: 0, height: '42px' }}>
-              <Search size={18} className="search-icon" />
-              <input 
-                type="text" 
-                placeholder="Buscar projeto..." 
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ height: '100%' }}
-              />
-            </div>
+        <div style={{ flex: 1, width: '100%' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+             <div className="search-bar" style={{ width: '240px', flex: '0 0 240px', margin: 0, height: '42px' }}>
+               <Search size={18} className="search-icon" />
+               <input 
+                 type="text" 
+                 placeholder="Buscar projeto..." 
+                 value={search}
+                 onChange={(e) => setSearch(e.target.value)}
+                 style={{ height: '100%' }}
+               />
+             </div>
 
+             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button 
               className="btn-add-project" 
               style={{ background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '500' }} 
@@ -523,6 +524,7 @@ Por favor, mantenha a aba aberta.`);
             <button className="btn-add-project btn-danger" onClick={handleDeleteAll}>
               <Trash2 size={18} /> Limpar Todos
             </button>
+             </div>
           </div>
         </div>
       </div>
