@@ -56,6 +56,7 @@ const ProjectsPanel: React.FC = () => {
   const [isSyncingAsana, setIsSyncingAsana] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncTotal, setSyncTotal] = useState(0);
+  const [isSearchVisible, setIsSearchVisible] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false);
@@ -467,64 +468,56 @@ Por favor, mantenha a aba aberta.`);
         </div>
       )}
       
-      <div className="projects-header" style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: '0.75rem', justifyContent: 'space-between', padding: '0.5rem 1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-          <Briefcase size={22} color="var(--accent)" />
-          <h1 style={{ fontSize: '1.1rem', fontWeight: '800', whiteSpace: 'nowrap', margin: 0 }}>Projetos</h1>
+      <div className="projects-header">
+        <div>
+          <div className="projects-title">
+            <Activity size={28} color="var(--accent)" />
+            Monitoramento de Projetos
+          </div>
+          <p className="projects-subtitle">Acompanhe em tempo real o andamento e a saúde das implantações e entregas ativas.</p>
         </div>
         
-        <div className="search-bar" style={{ width: '160px', flex: '0 1 160px', margin: 0, height: '36px', minWidth: '120px' }}>
-          <Search size={14} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Buscar..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ height: '100%', fontSize: '0.8rem' }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
           <button 
             className="btn-add-project" 
-            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
             onClick={handleSyncAsana}
             disabled={isSyncingAsana}
           >
-            {isSyncingAsana ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} 
+            {isSyncingAsana ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} 
              Asana
           </button>
           
           <button 
             className="btn-add-project" 
-            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
             onClick={() => fileInputRef.current?.click()}
           >
-            <Upload size={12} /> Importar
+            <Upload size={14} /> Importar
           </button>
 
           <button 
             className="btn-add-project" 
-            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
             onClick={() => handleDownloadTemplate()}
           >
-            <Download size={12} /> XLS
+            <Download size={14} /> Modelo XLS
           </button>
 
           <button 
             className="btn-add-project" 
-            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', fontWeight: '600' }} 
+            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }} 
             onClick={() => handleOpenModal()}
           >
-            <Plus size={12} /> Novo
+            <Plus size={14} /> Novo Projeto
           </button>
 
           <button 
             className="btn-add-project btn-danger" 
-            style={{ padding: '0.4rem 0.6rem', fontSize: '0.75rem', fontWeight: '600' }}
+            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }}
             onClick={handleDeleteAll}
           >
-            <Trash2 size={12} /> Limpar
+            <Trash2 size={14} /> Limpar Todos
           </button>
         </div>
       </div>
@@ -554,7 +547,28 @@ Por favor, mantenha a aba aberta.`);
       </div>
 
       <div className="filter-row" style={{ flexWrap: 'nowrap', gap: '0.5rem', justifyContent: 'space-between', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-        <div className="filters-group" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'nowrap', alignItems: 'center' }}>
+        <div className="filters-group" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', transition: 'all 0.3s ease' }}>
+            {isSearchVisible && (
+              <input 
+                type="text" 
+                autoFocus
+                placeholder="Pesquisar..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ width: '180px', padding: '0.5rem 0.75rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem', marginRight: '0.5rem', outline: 'none', boxShadow: '0 0 10px rgba(255,193,7,0.1)' }}
+              />
+            )}
+            <button 
+              onClick={() => setIsSearchVisible(!isSearchVisible)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0.5rem', display: 'flex', alignItems: 'center' }}
+              title="Pesquisar"
+            >
+              <Search size={22} color="#FFC107" strokeWidth={3} />
+            </button>
+          </div>
+
           <select 
             className="filter-select" 
             value={filterStatus} 
