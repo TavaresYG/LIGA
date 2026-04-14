@@ -48,23 +48,23 @@ function AppContent() {
 
   const toggleTheme = () => setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
 
+  const fetchPermissions = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/me/permissions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPermissions(data.permissions || []);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar permissões:', err);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
-
-    const fetchPermissions = async () => {
-      try {
-        const res = await fetch(`${API_URL}/me/permissions`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setPermissions(data.permissions || []);
-        }
-      } catch (err) {
-        console.error('Erro ao buscar permissões:', err);
-      }
-    };
-
     fetchPermissions();
 
     fetch(`${API_URL}/me/role`, { headers: { Authorization: `Bearer ${token}` } })
@@ -96,6 +96,40 @@ function AppContent() {
   const handleEditDoc = (doc: SavedDoc) => {
     setCurrentDoc(doc);
     setView('kickoff');
+  };
+
+  const handleSaveDoc = async (formData: FormData) => {
+    if (!token) return;
+    try {
+      const url = currentDoc 
+        ? `${API_URL}/documents/${currentDoc.id}` 
+        : `${API_URL}/documents`;
+      
+      const res = await fetch(url, {
+        method: currentDoc ? 'PUT' : 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          type: 'kickoff',
+          client_name: formData.nome,
+          date: formData.data,
+          implantador: formData.implantador,
+          data: formData
+        })
+      });
+
+      if (res.ok) {
+        setView('dashboard');
+        setCurrentDoc(null);
+      } else {
+        alert('Erro ao salvar documento');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Falha na conexão com o servidor');
+    }
   };
 
   if (loading) return <div className="loading-container"><div className="loader"></div></div>;
@@ -219,7 +253,13 @@ function AppContent() {
         {view === 'checklist' && hasPerm('checklist') && <ChecklistPage />}
         {view === 'distribuicao' && hasPerm('distribuicao') && <PointDistributionPage />}
         
-        {view === 'kickoff' && <KickoffForm doc={currentDoc} onSave={() => setView('dashboard')} onCancel={() => setView('dashboard')} />}
+        {view === 'kickoff' && (
+            <KickoffForm 
+                initialData={currentDoc?.data} 
+                onSave={handleSaveDoc} 
+                onCancel={() => setView('dashboard')} 
+            />
+        )}
 
         {!hasPerm(view) && hasPerm('dashboard') && (
              <Dashboard onNewDoc={handleNewDoc} onViewDoc={handleEditDoc} />
