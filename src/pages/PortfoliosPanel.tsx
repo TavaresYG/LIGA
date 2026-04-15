@@ -41,7 +41,7 @@ interface Project {
 }
 
 const PortfoliosPanel: React.FC = () => {
-  const { token } = useAuth();
+  const { token, permissions } = useAuth();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -376,47 +376,57 @@ Verifique se você tem permissão de administrador ou se o servidor está online
             </button>
           </div>
 
-          <button 
-            className="btn-add-project" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
-            onClick={handleSyncAsana}
-            disabled={isSyncingAsana}
-          >
-            {isSyncingAsana ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} 
-             Asana
-          </button>
-          
-          <button 
-            className="btn-add-project" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload size={14} /> Importar
-          </button>
+          {permissions.includes('project_sync') && (
+            <button 
+              className="btn-add-project" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+              onClick={handleSyncAsana}
+              disabled={isSyncingAsana}
+            >
+              {isSyncingAsana ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} 
+               Asana
+            </button>
+          )}
 
-          <button 
-            className="btn-add-project" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
-            onClick={handleDownloadTemplate}
-          >
-            <Download size={14} /> Modelo XLS
-          </button>
+          {permissions.includes('project_import') && (
+            <button 
+              className="btn-add-project" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={14} /> Importar
+            </button>
+          )}
 
-          <button 
-            className="btn-add-project" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }} 
-            onClick={() => handleOpenModal()}
-          >
-            <Plus size={14} /> Novo Portfólio
-          </button>
+          {permissions.includes('project_template') && (
+            <button 
+              className="btn-add-project" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+              onClick={() => handleDownloadTemplate()}
+            >
+              <Download size={14} /> Modelo XLS
+            </button>
+          )}
 
-          <button 
-            className="btn-add-project btn-danger" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }}
-            onClick={handleDeleteAll}
-          >
-            <Trash2 size={14} /> Limpar Todos
-          </button>
+          {permissions.includes('project_create') && (
+            <button 
+              className="btn-add-project" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }} 
+              onClick={() => handleOpenModal()}
+            >
+              <Building2 size={14} /> Novo Cliente
+            </button>
+          )}
+
+          {permissions.includes('project_clear') && (
+            <button 
+              className="btn-add-project btn-danger" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }}
+              onClick={handleDeleteAll}
+            >
+              <Trash2 size={14} /> Limpar Todos
+            </button>
+          )}
         </div>
       </div>
 

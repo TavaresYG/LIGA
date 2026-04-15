@@ -56,6 +56,33 @@ const requireOrganizadorOrAdmin = async (req, res, next) => {
   }
 };
 
+// ===================== PERMISSIONS MIDDLEWARE =====================
+
+const hasPermission = async (userId, permission) => {
+  try {
+    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [userId]);
+    if (roleRes.rows.length === 0) return false;
+    const roleName = roleRes.rows[0].role;
+    if (roleName === 'admin') return true;
+    const customRoleRes = await pool.query(`SELECT 1 FROM role_permissions rp JOIN custom_roles cr ON rp.role_id = cr.id WHERE cr.name = $1 AND rp.view_name = $2`, [roleName, permission]);
+    if (customRoleRes.rows.length > 0) return true;
+    const defaults = {
+      'admin': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'project_create', 'project_import', 'project_template', 'project_clear', 'project_sync'],
+      'organizador': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals', 'bi', 'project_sync', 'projects', 'project_import', 'project_template'],
+      'member': ['dashboard', 'ranking', 'loja', 'extrato', 'goals']
+    };
+    return (defaults[roleName] || []).includes(permission);
+  } catch (err) {
+    console.error('Error in hasPermission:', err);
+    return false;
+  }
+};
+
+const requirePermission = (permission) => async (req, res, next) => {
+  if (await hasPermission(req.user.id, permission)) return next();
+  res.status(403).json({ error: `Acesso negado: requer permissão '${permission}'` });
+};
+
 // ===================== AUTH ROUTES =====================
 
 app.post('/api/auth/signup', async (req, res) => {
@@ -835,16 +862,197 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
   }
 });
 
-// Create a project
-app.post('/api/projects', authenticateToken, async (req, res) => {
-  const { priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee } = req.body;
-  
+// ===================== POINTS STATEMENT =====================
+
+// GET /api/me/statement — unified point history for the logged-in user
+app.get('/api/me/statement', authenticateToken, async (req, res) => {
   try {
-    // Ensure client exists in clients table
+    const userId = req.user.id;
+
+    // Approved task completions (earn points)
+    const tasks = await pool.query(`
+      SELECT
+        tc.id,
+        'task' AS type,
+        tt.name AS description,
+        tc.points_awarded AS points,
+        tc.approved_at AS date,
+        tc.notes,
+        tc.status
+      FROM task_completions tc
+      LEFT JOIN task_types tt ON tt.id = tc.task_type_id
+      WHERE tc.user_id = $1 AND (tc.status = 'approved' OR tc.status = 'pending')
+    `, [userId]);
+
+    // Bonuses (earn points)
+    const bonuses = await pool.query(`
+      SELECT
+        b.id,
+        'bonus' AS type,
+        COALESCE('Bônus: ' || b.reason, 'Bônus de Equipe') AS description,
+        b.points AS points,
+        b.created_at AS date,
+        b.reason AS notes,
+        'approved' AS status
+      FROM bonuses b
+      WHERE b.user_id = $1
+    `, [userId]);
+
+    // Redemptions (spend points)
+    const redemptions = await pool.query(`
+      SELECT
+        r.id,
+        'redemption' AS type,
+        'Resgate: ' || r.item_name AS description,
+        -r.points_spent AS points,
+        r.created_at AS date,
+        r.status AS notes,
+        r.status
+      FROM redemptions r
+      WHERE r.user_id = $1 AND r.status != 'cancelled'
+    `, [userId]);
+
+    // Merge and sort by date descending
+    const all = [
+      ...tasks.rows,
+      ...bonuses.rows,
+      ...redemptions.rows,
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    res.json(all);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar extrato: ' + err.message });
+  }
+});
+
+// GET /api/users/:id/statement — extrato de outro usuário (apenas admin/organizador)
+app.get('/api/users/:id/statement', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const tasks = await pool.query(`
+      SELECT tc.id, 'task' AS type, tt.name AS description,
+        tc.points_awarded AS points, tc.approved_at AS date, tc.notes, tc.status
+      FROM task_completions tc
+      LEFT JOIN task_types tt ON tt.id = tc.task_type_id
+      WHERE tc.user_id = $1 AND (tc.status = 'approved' OR tc.status = 'pending')
+    `, [userId]);
+
+    const bonuses = await pool.query(`
+      SELECT b.id, 'bonus' AS type,
+        COALESCE('Bônus: ' || b.reason, 'Bônus de Equipe') AS description,
+        b.points, b.created_at AS date, b.reason AS notes, 'approved' AS status
+      FROM bonuses b WHERE b.user_id = $1
+    `, [userId]);
+
+    const all = [...tasks.rows, ...bonuses.rows]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    res.json(all);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar extrato: ' + err.message });
+  }
+});
+
+// ===================== PROJECTS =====================
+
+// ===================== CLIENTS =====================
+
+// Get all unique client names from clients table and documents
+app.get('/api/clients', authenticateToken, async (req, res) => {
+  try {
+    const clientsResult = await pool.query('SELECT name FROM clients');
+    const docsResult = await pool.query('SELECT DISTINCT client_name FROM documents');
+    
+    const combined = new Set([
+      ...clientsResult.rows.map(r => r.name),
+      ...docsResult.rows.map(r => r.client_name).filter(Boolean)
+    ]);
+    
+    res.json(Array.from(combined).sort());
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar clientes: ' + err.message });
+  }
+});
+
+// ===================== PORTFOLIOS =====================
+
+// Get all portfolios
+app.get('/api/portfolios', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM clients ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar portfólios: ' + err.message });
+  }
+});
+
+// Create a portfolio
+app.post('/api/portfolios', authenticateToken, async (req, res) => {
+  const { name, owner, description } = req.body;
+  try {
+    let result = await pool.query(
+      'UPDATE clients SET owner = $1, description = $2 WHERE name = $3 RETURNING *',
+      [owner, description, name]
+    );
+
+    if (result.rows.length === 0) {
+      result = await pool.query(
+        'INSERT INTO clients (name, owner, description) VALUES ($1, $2, $3) RETURNING *',
+        [name, owner, description]
+      );
+    }
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao criar portfólio: ' + err.message });
+  }
+});
+
+// Update a portfolio
+app.put('/api/portfolios/:id', authenticateToken, async (req, res) => {
+  const { name, owner, description } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE clients SET name = $1, owner = $2, description = $3 WHERE id = $4 RETURNING *',
+      [name, owner, description, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Portfólio não encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar portfólio: ' + err.message });
+  }
+});
+
+// Delete all portfolios
+app.delete('/api/portfolios-all', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM clients');
+    res.json({ message: 'Todos os portfólios excluídos com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao deletar portfólios: ' + err.message });
+  }
+});
+
+// Delete a portfolio
+// ===================== PROJECTS =====================
+
+// Get all projects
+app.get('/api/projects', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM projects ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar projetos: ' + err.message });
+  }
+});
+
+// POST - Criar novo projeto
+app.post('/api/projects', authenticateToken, requirePermission('project_create'), async (req, res) => {
+  const { priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee } = req.body;
+  try {
     if (client_name) {
       await pool.query('INSERT INTO clients (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [client_name]);
     }
-
     const result = await pool.query(
       `INSERT INTO projects (priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
@@ -860,13 +1068,10 @@ app.post('/api/projects', authenticateToken, async (req, res) => {
 app.put('/api/projects/:id', authenticateToken, async (req, res) => {
   const { priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee } = req.body;
   const { id } = req.params;
-  
   try {
-    // Ensure client exists in clients table
     if (client_name) {
       await pool.query('INSERT INTO clients (name) VALUES ($1) ON CONFLICT (name) DO NOTHING', [client_name]);
     }
-
     const result = await pool.query(
       `UPDATE projects SET 
        priority = $1, name = $2, client_name = $3, progress = $4, status = $5, is_live = $6, 
@@ -881,13 +1086,13 @@ app.put('/api/projects/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete ALL projects
-app.delete('/api/projects-all', authenticateToken, async (req, res) => {
+// DELETE - Limpar todos os projetos
+app.delete('/api/projects-all/clear', authenticateToken, requirePermission('project_clear'), async (req, res) => {
   try {
     await pool.query('DELETE FROM projects');
-    res.json({ message: 'Todos os projetos excluídos com sucesso' });
+    res.json({ message: 'Todos os projetos foram removidos' });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao deletar projetos: ' + err.message });
+    res.status(500).json({ error: 'Erro ao remover projetos: ' + err.message });
   }
 });
 
@@ -902,203 +1107,60 @@ app.delete('/api/projects/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ===================== CLIENTS =====================
+
+app.get('/api/clients', authenticateToken, async (req, res) => {
+  try {
+    const clientsResult = await pool.query('SELECT name FROM clients');
+    const docsResult = await pool.query('SELECT DISTINCT client_name FROM documents');
+    const combined = new Set([
+      ...clientsResult.rows.map(r => r.name),
+      ...docsResult.rows.map(r => r.client_name).filter(Boolean)
+    ]);
+    res.json(Array.from(combined).sort());
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar clientes: ' + err.message });
+  }
+});
+
+// ===================== PORTFOLIOS =====================
+
+app.get('/api/portfolios', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM clients ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar portfólios: ' + err.message });
+  }
+});
+
+app.post('/api/portfolios', authenticateToken, async (req, res) => {
+  const { name, owner, description } = req.body;
+  try {
+    let result = await pool.query('UPDATE clients SET owner = $1, description = $2 WHERE name = $3 RETURNING *', [owner, description, name]);
+    if (result.rows.length === 0) {
+      result = await pool.query('INSERT INTO clients (name, owner, description) VALUES ($1, $2, $3) RETURNING *', [name, owner, description]);
+    }
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar portfólio: ' + err.message });
+  }
+});
+
 // ===================== CHECKLISTS =====================
 
-// Get all checklist items (admin/org see all, member see theirs)
 app.get('/api/checklists', authenticateToken, async (req, res) => {
   try {
-    const roleResult = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
-    const role = roleResult.rows.length > 0 ? roleResult.rows[0].role : (req.user.username === 'Yuri.Tavares' ? 'admin' : 'member');
-    
+    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
+    const role = roleRes.rows[0]?.role || 'member';
     let result;
     if (role === 'admin' || role === 'organizador') {
       result = await pool.query('SELECT * FROM checklists ORDER BY created_at DESC');
     } else {
-      result = await pool.query('SELECT * FROM checklists WHERE assigned_to = $1 ORDER BY created_at DESC', [req.user.id]);
-    }
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar checklist: ' + err.message });
-  }
-});
-
-// Create a checklist item
-app.post('/api/checklists', authenticateToken, async (req, res) => {
-  const { text, category, assigned_to, assigned_name } = req.body;
-  try {
-    const result = await pool.query(
-      'INSERT INTO checklists (text, category, assigned_to, assigned_name, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [text, category || 'Geral', assigned_to, assigned_name, req.user.id]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao criar item de checklist: ' + err.message });
-  }
-});
-
-// Update a checklist item (toggle completed)
-app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const { completed } = req.body;
-  try {
-    const result = await pool.query(
-      'UPDATE checklists SET completed = $1 WHERE id = $2 RETURNING *',
-      [completed, id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Item não encontrado' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao atualizar checklist: ' + err.message });
-  }
-});
-
-// Delete a checklist item
-app.delete('/api/checklists/:id', authenticateToken, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM checklists WHERE id = $1', [req.params.id]);
-    res.json({ message: 'Item excluído com sucesso' });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao deletar item: ' + err.message });
-  }
-});
-
-// Clear completed items
-app.delete('/api/checklists-all/completed', authenticateToken, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM checklists WHERE completed = TRUE');
-    res.json({ message: 'Itens concluídos removidos' });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao limpar checklist' });
-  }
-});
-
-// ===================== POINT DISTRIBUTION =====================
-
-app.post('/api/admin/manual-points', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
-  const { userId, entries } = req.body;
-  
-  if (!userId || !entries || !Array.isArray(entries)) {
-    return res.status(400).json({ error: 'Dados inválidos para lançamento' });
-  }
-
-  try {
-    // Process each entry in the checklist as a bonus record
-    const promises = entries.map(entry => {
-      return pool.query(
-        'INSERT INTO bonuses (user_id, points, reason, awarded_by) VALUES ($1, $2, $3, $4)',
-        [userId, entry.points, entry.description, req.user.id]
-      );
-    });
-
-    await Promise.all(promises);
-    res.json({ message: 'Distribuição de pontos concluída com sucesso' });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao processar distribuição: ' + err.message });
-  }
-});
-
-// ===================== CUSTOM ROLES & PERMISSIONS =====================
-
-// Get all roles
-app.get('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const roles = await pool.query('SELECT * FROM custom_roles ORDER BY name');
-    const permissions = await pool.query('SELECT * FROM role_permissions');
-    
-    // Group permissions by role
-    const rolesWithPerms = roles.rows.map(role => ({
-      ...role,
-      permissions: permissions.rows.filter(p => p.role_id === role.id).map(p => p.view_name)
-    }));
-    
-    res.json(rolesWithPerms);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Create/Update a role with its permissions
-app.post('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
-  const { name, permissions } = req.body;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    // Insert or update role
-    const roleRes = await client.query(
-      'INSERT INTO custom_roles (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = $1 RETURNING id',
-      [name]
-    );
-    const roleId = roleRes.rows[0].id;
-    
-    // Clear old permissions and set new ones
-    await client.query('DELETE FROM role_permissions WHERE role_id = $1', [roleId]);
-    if (permissions && permissions.length > 0) {
-      const inserts = permissions.map(view => 
-        client.query('INSERT INTO role_permissions (role_id, view_name) VALUES ($1, $2)', [roleId, view])
-      );
-      await Promise.all(inserts);
-    }
-    
-    await client.query('COMMIT');
-    res.json({ id: roleId, name, permissions });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
-  }
-});
-
-// Get current user permissions
-app.get('/api/me/permissions', authenticateToken, async (req, res) => {
-  try {
-    // 1. Get user direct role
-    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
-    const roleName = roleRes.rows.length > 0 ? roleRes.rows[0].role : 'member';
-    
-    // 2. If it's a default/legacy role, we might give default permissions
-    // 3. Check if it's a custom role
-    const customRoleRes = await pool.query(`
-      SELECT rp.view_name FROM role_permissions rp
-      JOIN custom_roles cr ON rp.role_id = cr.id
-      WHERE cr.name = $1
-    `, [roleName]);
-    
-    if (customRoleRes.rows.length > 0) {
-      return res.json({ permissions: customRoleRes.rows.map(r => r.view_name) });
-    }
-    
-    // Default fallback permissions for legacy roles
-    const defaults = {
-      'admin': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao'],
-      'organizador': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals'],
-      'member': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals']
-    };
-    
-    res.json({ permissions: defaults[roleName] || defaults['member'] });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ===================== CHECKLIST DA EQUIPE =====================
-
-// GET - Listar todos os checklists (admin/org vê tudo, membro vê só os seus)
-app.get('/api/checklists', authenticateToken, async (req, res) => {
-  try {
-    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
-    const role = roleRes.rows[0]?.role || 'member';
-    
-    let result;
-    if (role === 'admin' || role === 'organizador') {
+      // Busca tarefas onde o ID do usuário está na lista de atribuídos (ou se ele criou)
       result = await pool.query(
-        'SELECT * FROM checklists ORDER BY created_at DESC'
-      );
-    } else {
-      result = await pool.query(
-        'SELECT * FROM checklists WHERE assigned_to = $1 ORDER BY created_at DESC',
-        [req.user.id]
+        'SELECT * FROM checklists WHERE (assigned_to ILIKE $1 OR created_by = $2) ORDER BY created_at DESC',
+        [`%${req.user.id}%`, req.user.id]
       );
     }
     res.json(result.rows);
@@ -1107,26 +1169,36 @@ app.get('/api/checklists', authenticateToken, async (req, res) => {
   }
 });
 
-// POST - Criar novo item de checklist
 app.post('/api/checklists', authenticateToken, async (req, res) => {
-  const { text, category, assigned_to, assigned_name } = req.body;
-  if (!text) return res.status(400).json({ error: 'Texto é obrigatório' });
+  let { text, category, assigned_to, assigned_name, due_date, portfolio_name } = req.body;
   try {
+    // Se temos IDs mas não temos nomes, buscamos os nomes agora (Segurança extra)
+    if (assigned_to && (!assigned_name || assigned_name === 'Usuário' || assigned_name === 'Eu' || assigned_name === 'Usuário Selecionado')) {
+      const ids = assigned_to.split(',').map(id => id.trim()).filter(id => id.length > 20);
+      if (ids.length > 0) {
+        // Usar format correto para ARRAY de UUID no query
+        const namesRes = await pool.query('SELECT name FROM users WHERE id = ANY($1::uuid[])', [ids]);
+        if (namesRes.rows.length > 0) {
+          assigned_name = namesRes.rows.map(r => r.name).join(', ');
+        }
+      }
+    }
+
     const result = await pool.query(
-      `INSERT INTO checklists (text, category, assigned_to, assigned_name, created_by)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [text, category || 'Geral', assigned_to || req.user.id, assigned_name || null, req.user.id]
+      'INSERT INTO checklists (text, category, assigned_to, assigned_name, created_by, due_date, portfolio_name) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [text, category || 'Geral', assigned_to || req.user.id, assigned_name || null, req.user.id, due_date || null, portfolio_name || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
+    console.error('Erro ao criar checklist:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// PUT - Atualizar status (concluído/pendente) ou texto
+// PUT - Atualizar status ou texto/data/portfólio/atribuição
 app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { completed, text, category } = req.body;
+  const { completed, text, category, due_date, portfolio_name, assigned_to, assigned_name } = req.body;
   try {
     const fields = [];
     const values = [];
@@ -1134,12 +1206,14 @@ app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
     if (completed !== undefined) { fields.push(`completed = $${idx++}`); values.push(completed); }
     if (text !== undefined) { fields.push(`text = $${idx++}`); values.push(text); }
     if (category !== undefined) { fields.push(`category = $${idx++}`); values.push(category); }
+    if (due_date !== undefined) { fields.push(`due_date = $${idx++}`); values.push(due_date); }
+    if (portfolio_name !== undefined) { fields.push(`portfolio_name = $${idx++}`); values.push(portfolio_name); }
+    if (assigned_to !== undefined) { fields.push(`assigned_to = $${idx++}`); values.push(assigned_to); }
+    if (assigned_name !== undefined) { fields.push(`assigned_name = $${idx++}`); values.push(assigned_name); }
+    
     if (!fields.length) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
     values.push(id);
-    const result = await pool.query(
-      `UPDATE checklists SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
-      values
-    );
+    const result = await pool.query(`UPDATE checklists SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, values);
     if (!result.rows.length) return res.status(404).json({ error: 'Item não encontrado' });
     res.json(result.rows[0]);
   } catch (err) {
@@ -1147,212 +1221,15 @@ app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// DELETE - Remover um item
 app.delete('/api/checklists/:id', authenticateToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM checklists WHERE id = $1', [req.params.id]);
-    res.json({ message: 'Item removido' });
+    res.json({ message: 'Item excluído' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Clear completed items
-app.delete('/api/checklists-all/completed', authenticateToken, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM checklists WHERE completed = TRUE');
-    res.json({ message: 'Itens concluídos removidos' });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao limpar checklist' });
-  }
-});
-
-// ===================== POINT DISTRIBUTION =====================
-
-app.post('/api/admin/manual-points', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
-  const { userId, entries } = req.body;
-  
-  if (!userId || !entries || !Array.isArray(entries)) {
-    return res.status(400).json({ error: 'Dados inválidos para lançamento' });
-  }
-
-  try {
-    // Process each entry in the checklist as a bonus record
-    const promises = entries.map(entry => {
-      return pool.query(
-        'INSERT INTO bonuses (user_id, points, reason, awarded_by) VALUES ($1, $2, $3, $4)',
-        [userId, entry.points, entry.description, req.user.id]
-      );
-    });
-
-    await Promise.all(promises);
-    res.json({ message: 'Distribuição de pontos concluída com sucesso' });
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao processar distribuição: ' + err.message });
-  }
-});
-
-// ===================== CUSTOM ROLES & PERMISSIONS =====================
-
-// Get all roles
-app.get('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const roles = await pool.query('SELECT * FROM custom_roles ORDER BY name');
-    const permissions = await pool.query('SELECT * FROM role_permissions');
-    
-    // Group permissions by role
-    const rolesWithPerms = roles.rows.map(role => ({
-      ...role,
-      permissions: permissions.rows.filter(p => p.role_id === role.id).map(p => p.view_name)
-    }));
-    
-    res.json(rolesWithPerms);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Create/Update a role with its permissions
-app.post('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
-  const { name, permissions } = req.body;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    // Insert or update role
-    const roleRes = await client.query(
-      'INSERT INTO custom_roles (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = $1 RETURNING id',
-      [name]
-    );
-    const roleId = roleRes.rows[0].id;
-    
-    // Clear old permissions and set new ones
-    await client.query('DELETE FROM role_permissions WHERE role_id = $1', [roleId]);
-    if (permissions && permissions.length > 0) {
-      const inserts = permissions.map(view => 
-        client.query('INSERT INTO role_permissions (role_id, view_name) VALUES ($1, $2)', [roleId, view])
-      );
-      await Promise.all(inserts);
-    }
-    
-    await client.query('COMMIT');
-    res.json({ id: roleId, name, permissions });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
-  }
-});
-
-// Get current user permissions
-app.get('/api/me/permissions', authenticateToken, async (req, res) => {
-  try {
-    // 1. Get user direct role
-    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
-    const roleName = roleRes.rows.length > 0 ? roleRes.rows[0].role : 'member';
-    
-    // 2. If it's a default/legacy role, we might give default permissions
-    // 3. Check if it's a custom role
-    const customRoleRes = await pool.query(`
-      SELECT rp.view_name FROM role_permissions rp
-      JOIN custom_roles cr ON rp.role_id = cr.id
-      WHERE cr.name = $1
-    `, [roleName]);
-    
-    if (customRoleRes.rows.length > 0) {
-      return res.json({ permissions: customRoleRes.rows.map(r => r.view_name) });
-    }
-    
-    // Default fallback permissions for legacy roles
-    const defaults = {
-      'admin': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao'],
-      'organizador': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals'],
-      'member': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals']
-    };
-    
-    res.json({ permissions: defaults[roleName] || defaults['member'] });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ===================== CHECKLIST DA EQUIPE =====================
-
-// GET - Listar todos os checklists (admin/org vê tudo, membro vê só os seus)
-app.get('/api/checklists', authenticateToken, async (req, res) => {
-  try {
-    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
-    const role = roleRes.rows[0]?.role || 'member';
-    
-    let result;
-    if (role === 'admin' || role === 'organizador') {
-      result = await pool.query(
-        'SELECT * FROM checklists ORDER BY created_at DESC'
-      );
-    } else {
-      result = await pool.query(
-        'SELECT * FROM checklists WHERE assigned_to = $1 ORDER BY created_at DESC',
-        [req.user.id]
-      );
-    }
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST - Criar novo item de checklist
-app.post('/api/checklists', authenticateToken, async (req, res) => {
-  const { text, category, assigned_to, assigned_name } = req.body;
-  if (!text) return res.status(400).json({ error: 'Texto é obrigatório' });
-  try {
-    const result = await pool.query(
-      `INSERT INTO checklists (text, category, assigned_to, assigned_name, created_by)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [text, category || 'Geral', assigned_to || req.user.id, assigned_name || null, req.user.id]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// PUT - Atualizar status (concluído/pendente) ou texto
-app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const { completed, text, category } = req.body;
-  try {
-    const fields = [];
-    const values = [];
-    let idx = 1;
-    if (completed !== undefined) { fields.push(`completed = $${idx++}`); values.push(completed); }
-    if (text !== undefined) { fields.push(`text = $${idx++}`); values.push(text); }
-    if (category !== undefined) { fields.push(`category = $${idx++}`); values.push(category); }
-    if (!fields.length) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
-    values.push(id);
-    const result = await pool.query(
-      `UPDATE checklists SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
-      values
-    );
-    if (!result.rows.length) return res.status(404).json({ error: 'Item não encontrado' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE - Remover um item
-app.delete('/api/checklists/:id', authenticateToken, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM checklists WHERE id = $1', [req.params.id]);
-    res.json({ message: 'Item removido' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE - Limpar todos os concluídos
 app.delete('/api/checklists-all/completed', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM checklists WHERE completed = TRUE');
@@ -1362,166 +1239,122 @@ app.delete('/api/checklists-all/completed', authenticateToken, requireOrganizado
   }
 });
 
+// ===================== POINTS STATEMENT =====================
+
+app.get('/api/me/statement', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const tasks = await pool.query(`SELECT tc.id, 'task' AS type, tt.name AS description, tc.points_awarded AS points, tc.approved_at AS date, tc.notes, tc.status FROM task_completions tc LEFT JOIN task_types tt ON tt.id = tc.task_type_id WHERE tc.user_id = $1 AND (tc.status = 'approved' OR tc.status = 'pending')`, [userId]);
+    const bonuses = await pool.query(`SELECT b.id, 'bonus' AS type, COALESCE('Bônus: ' || b.reason, 'Bônus de Equipe') AS description, b.points, b.created_at AS date, b.reason AS notes, 'approved' AS status FROM bonuses b WHERE b.user_id = $1`, [userId]);
+    const redemptions = await pool.query(`SELECT r.id, 'redemption' AS type, 'Resgate: ' || r.item_name AS description, -r.points_spent AS points, r.created_at AS date, r.status AS notes, r.status FROM redemptions r WHERE r.user_id = $1 AND r.status != 'cancelled'`, [userId]);
+    const all = [...tasks.rows, ...bonuses.rows, ...redemptions.rows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    res.json(all);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ===================== CUSTOM ROLES & PERMISSIONS =====================
+
+app.get('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const roles = await pool.query('SELECT * FROM custom_roles ORDER BY name');
+    const permissions = await pool.query('SELECT * FROM role_permissions');
+    const rolesWithPerms = roles.rows.map(role => ({ ...role, permissions: permissions.rows.filter(p => p.role_id === role.id).map(p => p.view_name) }));
+    res.json(rolesWithPerms);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
+  const { name, permissions } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const roleRes = await client.query('INSERT INTO custom_roles (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = $1 RETURNING id', [name]);
+    const roleId = roleRes.rows[0].id;
+    await client.query('DELETE FROM role_permissions WHERE role_id = $1', [roleId]);
+    if (permissions?.length) await Promise.all(permissions.map(view => client.query('INSERT INTO role_permissions (role_id, view_name) VALUES ($1, $2)', [roleId, view])));
+    await client.query('COMMIT');
+    res.json({ id: roleId, name, permissions });
+  } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }); } finally { client.release(); }
+});
+
+app.get('/api/me/permissions', authenticateToken, async (req, res) => {
+  try {
+    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
+    const roleName = roleRes.rows[0]?.role || 'member';
+    const customRoleRes = await pool.query(`SELECT rp.view_name FROM role_permissions rp JOIN custom_roles cr ON rp.role_id = cr.id WHERE cr.name = $1`, [roleName]);
+    if (customRoleRes.rows.length > 0) return res.json({ role: roleName, permissions: customRoleRes.rows.map(r => r.view_name) });
+    const defaults = {
+      'admin': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'project_create', 'project_import', 'project_template', 'project_clear', 'project_sync'],
+      'organizador': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals', 'bi', 'project_sync', 'projects', 'project_import', 'project_template'],
+      'member': ['dashboard', 'ranking', 'loja', 'extrato', 'goals']
+    };
+    res.json({ role: roleName, permissions: defaults[roleName] || defaults['member'] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ===================== ASANA BACKGROUND SYNC =====================
 
-const asanaSyncState = {
-  isRunning: false,
-  progress: 0,
-  total: 0,
-  lastSyncAt: null,
-  lastSyncCount: 0,
-  lastSyncError: null,
-};
-
+const asanaSyncState = { isRunning: false, progress: 0, total: 0, lastSyncAt: null, lastSyncCount: 0, lastSyncError: null };
 const MIN_SYNC_INTERVAL_HOURS = 2;
 
 app.get('/api/asana/sync/status', authenticateToken, (req, res) => {
-  res.json({
-    isRunning: asanaSyncState.isRunning,
-    progress: asanaSyncState.progress,
-    total: asanaSyncState.total,
-    lastSyncAt: asanaSyncState.lastSyncAt,
-    lastSyncCount: asanaSyncState.lastSyncCount,
-    lastSyncError: asanaSyncState.lastSyncError,
-    minIntervalHours: MIN_SYNC_INTERVAL_HOURS
-  });
+  res.json({ ...asanaSyncState, minIntervalHours: MIN_SYNC_INTERVAL_HOURS });
 });
 
-app.post('/api/asana/sync', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
+app.post('/api/asana/sync', authenticateToken, requirePermission('project_sync'), async (req, res) => {
   const { asanaToken, workspaceId, force } = req.body;
   if (!asanaToken) return res.status(400).json({ error: 'Token do Asana é obrigatório' });
-
-  if (asanaSyncState.isRunning) {
-    return res.status(409).json({ error: 'Sincronização já em andamento' });
-  }
-
+  if (asanaSyncState.isRunning) return res.status(409).json({ error: 'Sincronização já em andamento' });
   if (!force && asanaSyncState.lastSyncAt) {
     const hoursSince = (Date.now() - new Date(asanaSyncState.lastSyncAt).getTime()) / 3600000;
-    if (hoursSince < MIN_SYNC_INTERVAL_HOURS) {
-      return res.status(429).json({ 
-        error: `Aguarde o intervalo de ${MIN_SYNC_INTERVAL_HOURS}h entre sincronizações automáticas.`,
-        lastSyncAt: asanaSyncState.lastSyncAt
-      });
-    }
+    if (hoursSince < MIN_SYNC_INTERVAL_HOURS) return res.status(429).json({ error: `Aguarde ${MIN_SYNC_INTERVAL_HOURS}h entre sincronizações.`, lastSyncAt: asanaSyncState.lastSyncAt });
   }
-
   res.json({ message: 'Sincronização iniciada' });
-  runAsanaSync(asanaToken, workspaceId).catch(err => {
-    console.error('❌ [Asana Sync bg Error]:', err.message);
-  });
+  runAsanaSync(asanaToken, workspaceId).catch(err => console.error('❌ [Asana Sync bg Error]:', err.message));
 });
 
 async function runAsanaSync(asanaToken, workspaceId) {
-  asanaSyncState.isRunning = true;
-  asanaSyncState.progress = 0;
-  asanaSyncState.total = 0;
-  asanaSyncState.lastSyncError = null;
-  console.log('🚀 [Asana Sync] Iniciando sincronização paralela otimizada...');
-
+  asanaSyncState.isRunning = true; asanaSyncState.progress = 0; asanaSyncState.total = 0; asanaSyncState.lastSyncError = null;
   const asanaFetch = async (url) => {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${asanaToken}` } });
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      throw new Error(`Asana: ${res.status} - ${errBody.errors?.[0]?.message || 'Erro'}`);
-    }
+    if (!res.ok) { const errBody = await res.json().catch(() => ({})); throw new Error(`Asana: ${res.status} - ${errBody.errors?.[0]?.message || 'Erro'}`); }
     return res.json();
   };
-
   try {
-    const projectsUri = workspaceId 
-      ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=gid,name,current_status.text,custom_fields,owner.name`
-      : `https://app.asana.com/api/1.0/projects?opt_fields=gid,name,current_status.text,custom_fields,owner.name`;
-
+    const projectsUri = workspaceId ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=gid,name,current_status.text,custom_fields,owner.name` : `https://app.asana.com/api/1.0/projects?opt_fields=gid,name,current_status.text,custom_fields,owner.name`;
     const { data: asanaProjects } = await asanaFetch(projectsUri);
     asanaSyncState.total = asanaProjects.length;
-
     const projectToClient = {};
     try {
-      const portfUri = workspaceId 
-        ? `https://app.asana.com/api/1.0/portfolios?workspace=${workspaceId}&owner=me&opt_fields=name,gid`
-        : `https://app.asana.com/api/1.0/portfolios?owner=me&opt_fields=name,gid`;
-      
+      const portfUri = workspaceId ? `https://app.asana.com/api/1.0/portfolios?workspace=${workspaceId}&owner=me&opt_fields=name,gid` : `https://app.asana.com/api/1.0/portfolios?owner=me&opt_fields=name,gid`;
       const { data: portfolios } = await asanaFetch(portfUri);
-      
-      // Mapear portfólios em lotes de 5
       for (let i = 0; i < portfolios.length; i += 5) {
         const batch = portfolios.slice(i, i + 5);
         await Promise.all(batch.map(async (p) => {
-          try {
-            const { data: items } = await asanaFetch(`https://app.asana.com/api/1.0/portfolios/${p.gid}/items?opt_fields=gid`);
-            items.forEach(it => { projectToClient[it.gid] = p.name; });
-          } catch (e) {}
+          try { const { data: items } = await asanaFetch(`https://app.asana.com/api/1.0/portfolios/${p.gid}/items?opt_fields=gid`); items.forEach(it => { projectToClient[it.gid] = p.name; }); } catch (e) {}
         }));
       }
-    } catch (e) { console.warn('⚠️ Falha ao mapear portfólios'); }
-
+    } catch (e) {}
     const getVal = (fields, name) => {
       const f = (fields || []).find(f => f.name.toLowerCase() === name.toLowerCase());
-      if (!f) return '---';
-      return f.display_value || f.text_value || (f.number_value !== undefined ? String(f.number_value) : '---');
+      if (!f) return '---'; return f.display_value || f.text_value || (f.number_value !== undefined ? String(f.number_value) : '---');
     };
-
     let count = 0;
-    // Processar projetos em lotes de 10
     for (let i = 0; i < asanaProjects.length; i += 10) {
       const batch = asanaProjects.slice(i, i + 10);
       await Promise.all(batch.map(async (ap) => {
         try {
           let prog = 0;
-          try {
-            const { data: counts } = await asanaFetch(`https://app.asana.com/api/1.0/projects/${ap.gid}/task_counts?opt_fields=num_tasks,num_completed_tasks`);
-            if (counts.num_tasks > 0) prog = Math.round((counts.num_completed_tasks / counts.num_tasks) * 100);
-          } catch (e) {}
-
+          try { const { data: counts } = await asanaFetch(`https://app.asana.com/api/1.0/projects/${ap.gid}/task_counts?opt_fields=num_tasks,num_completed_tasks`); if (counts.num_tasks > 0) prog = Math.round((counts.num_completed_tasks / counts.num_tasks) * 100); } catch (e) {}
           const fields = ap.custom_fields || [];
           const statusText = getVal(fields, 'Status Projeto') || ap.current_status?.text || '---';
-          const clientNameFromAsana = projectToClient[ap.gid] || '---';
-
-          await pool.query(`
-            INSERT INTO projects (asana_gid, priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-            ON CONFLICT (asana_gid) DO UPDATE SET
-              name = EXCLUDED.name,
-              priority = EXCLUDED.priority, 
-              client_name = CASE WHEN EXCLUDED.client_name != '---' THEN EXCLUDED.client_name ELSE projects.client_name END,
-              progress = EXCLUDED.progress, 
-              status = EXCLUDED.status,
-              is_live = EXCLUDED.is_live, 
-              solution_hired = EXCLUDED.solution_hired,
-              analyst = EXCLUDED.analyst, 
-              whatsapp_group = EXCLUDED.whatsapp_group,
-              monthly_fee = EXCLUDED.monthly_fee, 
-              updated_at = CURRENT_TIMESTAMP
-          `, [
-            ap.gid,
-            getVal(fields, 'Prioridade Projeto'), 
-            ap.name, 
-            clientNameFromAsana,
-            prog, 
-            statusText, 
-            statusText.toLowerCase().includes('live'),
-            getVal(fields, 'Solução Contratada'), 
-            getVal(fields, 'Analista Responsável') || ap.owner?.name || '---',
-            getVal(fields, 'Grupo Whatsapp'), 
-            Number(getVal(fields, 'Mensalidade')) || 0
-          ]);
-          count++;
-          asanaSyncState.progress = count;
-        } catch (e) {
-          console.error(`Erro no projeto ${ap.name}:`, e.message);
-        }
+          await pool.query(`INSERT INTO projects (asana_gid, priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (asana_gid) DO UPDATE SET name = EXCLUDED.name, priority = EXCLUDED.priority, client_name = CASE WHEN EXCLUDED.client_name != '---' THEN EXCLUDED.client_name ELSE projects.client_name END, progress = EXCLUDED.progress, status = EXCLUDED.status, is_live = EXCLUDED.is_live, solution_hired = EXCLUDED.solution_hired, analyst = EXCLUDED.analyst, whatsapp_group = EXCLUDED.whatsapp_group, monthly_fee = EXCLUDED.monthly_fee, updated_at = CURRENT_TIMESTAMP`, [ap.gid, getVal(fields, 'Prioridade Projeto'), ap.name, projectToClient[ap.gid] || '---', prog, statusText, statusText.toLowerCase().includes('live'), getVal(fields, 'Solução Contratada'), getVal(fields, 'Analista Responsável') || ap.owner?.name || '---', getVal(fields, 'Grupo Whatsapp'), Number(getVal(fields, 'Mensalidade')) || 0]);
+          count++; asanaSyncState.progress = count;
+        } catch (e) {}
       }));
     }
-
-    asanaSyncState.lastSyncAt = new Date().toISOString();
-    asanaSyncState.lastSyncCount = count;
-    console.log(`✅ [Asana Sync] Finalizado: ${count} projetos.`);
-  } catch (err) {
-    asanaSyncState.lastSyncError = err.message;
-    console.error('❌ [Asana Sync Final Error]:', err.message);
-  } finally {
-    asanaSyncState.isRunning = false;
-  }
+    asanaSyncState.lastSyncAt = new Date().toISOString(); asanaSyncState.lastSyncCount = count;
+  } catch (err) { asanaSyncState.lastSyncError = err.message; } finally { asanaSyncState.isRunning = false; }
 }
 
 app.listen(PORT, () => {

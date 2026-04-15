@@ -17,6 +17,7 @@ interface AuthContextType {
   logout: () => void;
   loading: boolean;
   token: string | null;
+  permissions: string[];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,9 +35,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (savedUser && savedToken) {
       setUser(JSON.parse(savedUser));
       setToken(savedToken);
+      fetchPermissions(savedToken);
     }
     setLoading(false);
   }, []);
+
+  const fetchPermissions = async (authToken: string) => {
+    try {
+      const res = await fetch(`${API_URL}/me/permissions`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPermissions(data.permissions || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch permissions', err);
+    }
+  };
 
   const login = async (identifier: string, password: string) => {
     try {
@@ -52,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(data.token);
       localStorage.setItem('liga_user', JSON.stringify(data.user));
       localStorage.setItem('liga_token', data.token);
+      fetchPermissions(data.token);
       return true;
     } catch (err) {
       console.error('Login error:', err);
@@ -74,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(data.token);
       localStorage.setItem('liga_user', JSON.stringify(data.user));
       localStorage.setItem('liga_token', data.token);
+      fetchPermissions(data.token);
       return true;
     } catch (err) {
       console.error('Signup error:', err);
@@ -86,10 +105,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     localStorage.removeItem('liga_user');
     localStorage.removeItem('liga_token');
+    setPermissions([]);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, loading, token }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, loading, token, permissions }}>
       {children}
     </AuthContext.Provider>
   );

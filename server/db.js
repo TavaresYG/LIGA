@@ -195,9 +195,37 @@ const initDb = async () => {
         assigned_to UUID REFERENCES users(id) ON DELETE CASCADE,
         assigned_name VARCHAR(255),
         created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        due_date DATE,
+        portfolio_name VARCHAR(255),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Migração: Checklist Due Date e Portfolio + FORÇAR Multi-user support
+    try {
+      await pool.query('ALTER TABLE checklists ADD COLUMN IF NOT EXISTS due_date DATE');
+      await pool.query('ALTER TABLE checklists ADD COLUMN IF NOT EXISTS portfolio_name VARCHAR(255)');
+      
+      // 1. Descobrir e remover TODAS as constraints que apontam para assigned_to
+      await pool.query(`
+        DO $$ 
+        DECLARE 
+          r RECORD;
+        BEGIN
+          FOR r IN (SELECT constraint_name FROM information_schema.key_column_usage 
+                    WHERE table_name = 'checklists' AND column_name = 'assigned_to') 
+          LOOP
+            EXECUTE 'ALTER TABLE checklists DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name) || ' CASCADE';
+          END LOOP;
+        END $$;
+      `);
+
+      // 2. Tentar converter o tipo de forma definitiva
+      await pool.query('ALTER TABLE checklists ALTER COLUMN assigned_to TYPE VARCHAR(1000) USING assigned_to::VARCHAR');
+      console.log('✅ Coluna assigned_to convertida para VARCHAR com sucesso.');
+    } catch (e) {
+      console.log('Aviso na migração crítica de checklist:', e.message);
+    }
 
     console.log('✅ Banco de dados inicializado com sucesso (tabelas de gamificação incluídas).');
   } catch (err) {

@@ -41,7 +41,7 @@ interface Project {
 }
 
 const ProjectsPanel: React.FC = () => {
-  const { token, user } = useAuth();
+  const { token, user, permissions } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,7 +185,7 @@ const ProjectsPanel: React.FC = () => {
   const handleDeleteAll = async () => {
     if (!window.confirm('CUIDADO: Tem certeza que deseja excluir TODOS os projetos de uma vez? Esta ação não pode ser desfeita.')) return;
     try {
-      const res = await fetch(`${API_URL}/projects-all`, {
+      const res = await fetch(`${API_URL}/projects-all/clear`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -436,47 +436,57 @@ const ProjectsPanel: React.FC = () => {
             </button>
           </div>
 
-          <button 
-            className="btn-add-project" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
-            onClick={handleSyncAsana}
-            disabled={isSyncingAsana}
-          >
-            {isSyncingAsana ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} 
-             Asana
-          </button>
+          {permissions.includes('project_sync') && (
+            <button 
+              className="btn-add-project" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+              onClick={handleSyncAsana}
+              disabled={isSyncingAsana}
+            >
+              {isSyncingAsana ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} 
+               Asana
+            </button>
+          )}
           
-          <button 
-            className="btn-add-project" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload size={14} /> Importar
-          </button>
+          {permissions.includes('project_import') && (
+            <button 
+              className="btn-add-project" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={14} /> Importar
+            </button>
+          )}
 
-          <button 
-            className="btn-add-project" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
-            onClick={() => handleDownloadTemplate()}
-          >
-            <Download size={14} /> Modelo XLS
-          </button>
+          {permissions.includes('project_template') && (
+            <button 
+              className="btn-add-project" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', background: 'var(--bg-card)', color: 'var(--text-heading)', border: '1px solid var(--border-color)', fontWeight: '600' }} 
+              onClick={() => handleDownloadTemplate()}
+            >
+              <Download size={14} /> Modelo XLS
+            </button>
+          )}
 
-          <button 
-            className="btn-add-project" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }} 
-            onClick={() => handleOpenModal()}
-          >
-            <Plus size={14} /> Novo Projeto
-          </button>
+          {permissions.includes('project_create') && (
+            <button 
+              className="btn-add-project" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }} 
+              onClick={() => handleOpenModal()}
+            >
+              <Plus size={14} /> Novo Projeto
+            </button>
+          )}
 
-          <button 
-            className="btn-add-project btn-danger" 
-            style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }}
-            onClick={handleDeleteAll}
-          >
-            <Trash2 size={14} /> Limpar Todos
-          </button>
+          {permissions.includes('project_clear') && (
+            <button 
+              className="btn-add-project btn-danger" 
+              style={{ padding: '0.5rem 0.75rem', fontSize: '0.8rem', fontWeight: '600' }}
+              onClick={handleDeleteAll}
+            >
+              <Trash2 size={14} /> Limpar Todos
+            </button>
+          )}
         </div>
       </div>
 

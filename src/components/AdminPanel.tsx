@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   Target, Edit3, Clock, Store, Star, Package, Gift, X,
   ChevronRight, Settings, LayoutDashboard, Users, Link,
-  CheckCircle2, Loader2, ShieldCheck, Eye, Lock
+  CheckCircle2, XCircle, Loader2, ShieldCheck, Eye, Lock
 } from 'lucide-react';
 import '../styles/admin.css';
 
@@ -22,18 +22,23 @@ interface StoreItem { id: string; name: string; cost_points: number; stock: numb
 interface CustomRole { id: string; name: string; permissions: string[]; }
 
 const ALL_VIEWS = [
-  { id: 'dashboard',   label: '📊 Dashboard' },
-  { id: 'form',        label: '📋 Pré Kick Off' },
-  { id: 'kickoff',     label: '🚀 Kick Off' },
-  { id: 'ranking',     label: '🏆 Ranking' },
-  { id: 'loja',        label: '🛍️ Loja de Prêmios' },
-  { id: 'extrato',     label: '📜 Meu Extrato' },
-  { id: 'goals',       label: '🎯 Metas Ativas' },
-  { id: 'projects',    label: '📅 Painel de Projetos' },
-  { id: 'portfolios',  label: '💼 Painel de Portfólios' },
-  { id: 'checklist',   label: '📋 Checklist Equipe' },
-  { id: 'distribuicao',label: '⚖️ Distribuição de Pontos' },
-  { id: 'bi',          label: '📊 Painel BI' },
+  { id: 'dashboard',   label: '📊 Dashboard', type: 'view' },
+  { id: 'form',        label: '📋 Pré Kick Off', type: 'view' },
+  { id: 'kickoff',     label: '🚀 Kick Off', type: 'view' },
+  { id: 'ranking',     label: '🏆 Ranking', type: 'view' },
+  { id: 'loja',        label: '🛍️ Loja de Prêmios', type: 'view' },
+  { id: 'extrato',     label: '📜 Meu Extrato', type: 'view' },
+  { id: 'goals',       label: '🎯 Metas Ativas', type: 'view' },
+  { id: 'projects',    label: '📅 Painel de Projetos', type: 'view' },
+  { id: 'portfolios',  label: '💼 Painel de Portfólios', type: 'view' },
+  { id: 'checklist',   label: '📋 Checklist Equipe', type: 'view' },
+  { id: 'distribuicao',label: '⚖️ Distribuição de Pontos', type: 'view' },
+  { id: 'bi',          label: '📊 Painel BI', type: 'view' },
+  { id: 'project_create', label: '➕ Incluir novos projetos', type: 'action' },
+  { id: 'project_import',  label: '📤 Importar planilha', type: 'action' },
+  { id: 'project_template',label: '📥 Baixar modelo XLS', type: 'action' },
+  { id: 'project_clear',  label: '🗑️ Limpar projetos', type: 'action' },
+  { id: 'project_sync',   label: '🔄 Sincronizar Asana', type: 'action' },
 ];
 
 const DEFAULT_ROLES: CustomRole[] = [
@@ -313,35 +318,69 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
             {tab === 'roles' && role === 'admin' && (
               <div>
                 <h3 className="admin-section-title">Configurar Perfis e Permissões de Tela</h3>
-                <p className="admin-hint">Crie perfis personalizados e defina quais telas cada um pode acessar.</p>
-
-                <div className="admin-form" style={{ marginBottom: '2rem' }}>
-                  <div className="afield">
-                    <label>Nome do Perfil</label>
-                    <input placeholder="Ex: Consultor Especialista" value={roleForm.name} onChange={e => setRoleForm({ ...roleForm, name: e.target.value })} />
+                <div className="admin-form" style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', background: 'var(--bg-card)', padding: '1.5rem', border: '1px solid var(--border-color)', borderRadius: '1.25rem' }}>
+                  {/* Linha 1: Nome do Perfil ao lado do Campo */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <label style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-heading)', minWidth: '120px' }}>Nome do Perfil:</label>
+                    <input 
+                      placeholder="Ex: Consultor Especialista" 
+                      value={roleForm.name} 
+                      onChange={e => setRoleForm({ ...roleForm, name: e.target.value })} 
+                      style={{ flex: 1, padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'var(--bg-page)' }}
+                    />
                   </div>
-                  <div style={{ marginTop: '1.5rem' }}>
-                    <label style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--text-heading)', display: 'block', marginBottom: '1rem' }}>Telas Permitidas</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '0.75rem' }}>
-                      {ALL_VIEWS.map(v => (
-                        <div
-                          key={v.id}
-                          onClick={() => togglePermission(v.id)}
-                          style={{
-                            padding: '0.75rem 1rem', borderRadius: '0.75rem', cursor: 'pointer', transition: 'all 0.2s',
-                            display: 'flex', alignItems: 'center', gap: '0.75rem',
-                            border: `1px solid ${roleForm.permissions.has(v.id) ? 'var(--accent)' : 'var(--border-color)'}`,
-                            background: roleForm.permissions.has(v.id) ? 'rgba(255,193,7,0.08)' : 'var(--bg-card)',
-                          }}
-                        >
-                          {roleForm.permissions.has(v.id) ? <Eye size={18} color="var(--accent)" /> : <Lock size={18} color="var(--text-muted)" />}
-                          <span style={{ fontSize: '0.9rem', fontWeight: roleForm.permissions.has(v.id) ? '700' : '500', color: roleForm.permissions.has(v.id) ? 'var(--text-heading)' : 'var(--text-main)' }}>
-                            {v.label}
-                          </span>
-                        </div>
-                      ))}
+
+                  {/* Linha 3 (com espaçamento): Permissões Categorizadas */}
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <label style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--accent)', display: 'block', marginBottom: '1.25rem', paddingBottom: '0.5rem', borderBottom: '2px solid var(--accent-light)' }}>
+                      Acompanhamento de Acessos e Ações
+                    </label>
+
+                    {/* Bloco de Telas */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🖥️ Acesso às Telas</h4>
+                      <div className="permissions-grid" style={{ display: 'grid', gap: '0.75rem' }}>
+                        {ALL_VIEWS.filter(v => v.type === 'view').map(v => (
+                          <div
+                            key={v.id}
+                            onClick={() => togglePermission(v.id)}
+                            style={{
+                              padding: '0.75rem 1rem', borderRadius: '0.75rem', cursor: 'pointer', transition: 'all 0.2s',
+                              display: 'flex', alignItems: 'center', gap: '0.75rem',
+                              border: `1px solid ${roleForm.permissions.has(v.id) ? 'var(--accent)' : 'var(--border-color)'}`,
+                              background: roleForm.permissions.has(v.id) ? 'rgba(255,193,7,0.08)' : 'var(--bg-page)',
+                            }}
+                          >
+                            {roleForm.permissions.has(v.id) ? <Eye size={18} color="var(--accent)" /> : <Lock size={18} color="var(--text-muted)" />}
+                            <span style={{ fontSize: '0.85rem', fontWeight: roleForm.permissions.has(v.id) ? '700' : '500', color: roleForm.permissions.has(v.id) ? 'var(--text-heading)' : 'var(--text-main)' }}>{v.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Bloco de Ações */}
+                    <div>
+                      <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚙️ Ações e Botões Permitidos</h4>
+                      <div className="permissions-grid" style={{ display: 'grid', gap: '0.75rem' }}>
+                        {ALL_VIEWS.filter(v => v.type === 'action').map(v => (
+                          <div
+                            key={v.id}
+                            onClick={() => togglePermission(v.id)}
+                            style={{
+                              padding: '0.75rem 1rem', borderRadius: '0.75rem', cursor: 'pointer', transition: 'all 0.2s',
+                              display: 'flex', alignItems: 'center', gap: '0.75rem',
+                              border: `1px solid ${roleForm.permissions.has(v.id) ? '#3b82f6' : 'var(--border-color)'}`,
+                              background: roleForm.permissions.has(v.id) ? 'rgba(59,130,246,0.08)' : 'var(--bg-page)',
+                            }}
+                          >
+                            {roleForm.permissions.has(v.id) ? <CheckCircle2 size={18} color="#3b82f6" /> : <XCircle size={18} color="var(--text-muted)" />}
+                            <span style={{ fontSize: '0.85rem', fontWeight: roleForm.permissions.has(v.id) ? '700' : '500', color: roleForm.permissions.has(v.id) ? 'var(--text-heading)' : 'var(--text-main)' }}>{v.label}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
+
                   <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
                     <button className="btn-admin-action" onClick={submitRole} disabled={isSavingRole}>
                       {isSavingRole ? <Loader2 className="animate-spin" size={16} /> : 'Salvar Perfil Personalizado'}
