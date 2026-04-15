@@ -161,8 +161,9 @@ const initDb = async () => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS projects (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        asana_gid VARCHAR(255) UNIQUE,
         priority VARCHAR(50) DEFAULT 'Média',
-        name VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL UNIQUE,
         client_name VARCHAR(255),
         progress INT DEFAULT 0,
         status VARCHAR(100) DEFAULT 'Em andamento',
@@ -175,6 +176,14 @@ const initDb = async () => {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Migração: Adicionar asana_gid se não existir (para bancos legados)
+    try {
+      await pool.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS asana_gid VARCHAR(255) UNIQUE');
+      await pool.query('ALTER TABLE projects ADD CONSTRAINT projects_name_unique UNIQUE (name)');
+    } catch (e) {
+      // Ignora se a constraint já existir
+    }
 
     // 12. Shared Checklists
     await pool.query(`

@@ -101,6 +101,46 @@ const ProjectsPanel: React.FC = () => {
     }
   };
 
+  // Polling for Sync Status
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/asana/sync/status`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setIsSyncingAsana(data.isRunning);
+          setSyncProgress(data.progress || 0);
+          setSyncTotal(data.total || 0);
+
+          if (!data.isRunning && data.lastSyncError) {
+             console.error('Asana sync failed:', data.lastSyncError);
+          }
+
+          if (!data.isRunning && pollInterval) {
+            clearInterval(pollInterval);
+            fetchProjects();
+          }
+        }
+      } catch (err) {
+        console.error('Failed to poll sync status', err);
+      }
+    };
+
+    if (isSyncingAsana) {
+      pollInterval = setInterval(checkStatus, 2000);
+    } else {
+      checkStatus(); // Initial check
+    }
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [isSyncingAsana, token]);
+
   const handleSyncAsana = async () => {
     const asanaToken = localStorage.getItem('asana_token');
     const workspaceId = localStorage.getItem('asana_workspace');
@@ -110,7 +150,6 @@ const ProjectsPanel: React.FC = () => {
       return;
     }
 
-    setIsSyncingAsana(true);
     try {
       const response = await fetch(`${API_URL}/asana/sync`, {
         method: 'POST',
@@ -124,22 +163,22 @@ const ProjectsPanel: React.FC = () => {
       if (response.status === 429) {
         const data = await response.json();
         alert(data.error);
-        setIsSyncingAsana(false);
+        return;
+      }
+
+      if (response.status === 409) {
+        setIsSyncingAsana(true);
         return;
       }
 
       if (!response.ok) throw new Error('Falha ao iniciar sincronização no servidor');
 
-      alert('Sincronização iniciada em segundo plano no servidor! \n\nOs projetos serão atualizados gradualmente nos próximos minutos. Você pode continuar usando o sistema normalmente.');
+      setIsSyncingAsana(true);
+      alert('Sincronização iniciada em segundo plano! \n\nAcompanhe o progresso no topo da tela.');
       
-      // Atualiza a lista após alguns segundos para começar a ver as mudanças
-      setTimeout(fetchProjects, 3000);
-
     } catch (error: any) {
       console.error(error);
       alert('Erro ao sincronizar: ' + (error.message || error));
-    } finally {
-      setIsSyncingAsana(false);
     }
   };
 

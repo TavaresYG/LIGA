@@ -1157,6 +1157,201 @@ app.delete('/api/checklists/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Clear completed items
+app.delete('/api/checklists-all/completed', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM checklists WHERE completed = TRUE');
+    res.json({ message: 'Itens concluídos removidos' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao limpar checklist' });
+  }
+});
+
+// ===================== POINT DISTRIBUTION =====================
+
+app.post('/api/admin/manual-points', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
+  const { userId, entries } = req.body;
+  
+  if (!userId || !entries || !Array.isArray(entries)) {
+    return res.status(400).json({ error: 'Dados inválidos para lançamento' });
+  }
+
+  try {
+    // Process each entry in the checklist as a bonus record
+    const promises = entries.map(entry => {
+      return pool.query(
+        'INSERT INTO bonuses (user_id, points, reason, awarded_by) VALUES ($1, $2, $3, $4)',
+        [userId, entry.points, entry.description, req.user.id]
+      );
+    });
+
+    await Promise.all(promises);
+    res.json({ message: 'Distribuição de pontos concluída com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao processar distribuição: ' + err.message });
+  }
+});
+
+// ===================== CUSTOM ROLES & PERMISSIONS =====================
+
+// Get all roles
+app.get('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const roles = await pool.query('SELECT * FROM custom_roles ORDER BY name');
+    const permissions = await pool.query('SELECT * FROM role_permissions');
+    
+    // Group permissions by role
+    const rolesWithPerms = roles.rows.map(role => ({
+      ...role,
+      permissions: permissions.rows.filter(p => p.role_id === role.id).map(p => p.view_name)
+    }));
+    
+    res.json(rolesWithPerms);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create/Update a role with its permissions
+app.post('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
+  const { name, permissions } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Insert or update role
+    const roleRes = await client.query(
+      'INSERT INTO custom_roles (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = $1 RETURNING id',
+      [name]
+    );
+    const roleId = roleRes.rows[0].id;
+    
+    // Clear old permissions and set new ones
+    await client.query('DELETE FROM role_permissions WHERE role_id = $1', [roleId]);
+    if (permissions && permissions.length > 0) {
+      const inserts = permissions.map(view => 
+        client.query('INSERT INTO role_permissions (role_id, view_name) VALUES ($1, $2)', [roleId, view])
+      );
+      await Promise.all(inserts);
+    }
+    
+    await client.query('COMMIT');
+    res.json({ id: roleId, name, permissions });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Get current user permissions
+app.get('/api/me/permissions', authenticateToken, async (req, res) => {
+  try {
+    // 1. Get user direct role
+    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
+    const roleName = roleRes.rows.length > 0 ? roleRes.rows[0].role : 'member';
+    
+    // 2. If it's a default/legacy role, we might give default permissions
+    // 3. Check if it's a custom role
+    const customRoleRes = await pool.query(`
+      SELECT rp.view_name FROM role_permissions rp
+      JOIN custom_roles cr ON rp.role_id = cr.id
+      WHERE cr.name = $1
+    `, [roleName]);
+    
+    if (customRoleRes.rows.length > 0) {
+      return res.json({ permissions: customRoleRes.rows.map(r => r.view_name) });
+    }
+    
+    // Default fallback permissions for legacy roles
+    const defaults = {
+      'admin': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao'],
+      'organizador': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals'],
+      'member': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals']
+    };
+    
+    res.json({ permissions: defaults[roleName] || defaults['member'] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===================== CHECKLIST DA EQUIPE =====================
+
+// GET - Listar todos os checklists (admin/org vê tudo, membro vê só os seus)
+app.get('/api/checklists', authenticateToken, async (req, res) => {
+  try {
+    const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);
+    const role = roleRes.rows[0]?.role || 'member';
+    
+    let result;
+    if (role === 'admin' || role === 'organizador') {
+      result = await pool.query(
+        'SELECT * FROM checklists ORDER BY created_at DESC'
+      );
+    } else {
+      result = await pool.query(
+        'SELECT * FROM checklists WHERE assigned_to = $1 ORDER BY created_at DESC',
+        [req.user.id]
+      );
+    }
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST - Criar novo item de checklist
+app.post('/api/checklists', authenticateToken, async (req, res) => {
+  const { text, category, assigned_to, assigned_name } = req.body;
+  if (!text) return res.status(400).json({ error: 'Texto é obrigatório' });
+  try {
+    const result = await pool.query(
+      `INSERT INTO checklists (text, category, assigned_to, assigned_name, created_by)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [text, category || 'Geral', assigned_to || req.user.id, assigned_name || null, req.user.id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT - Atualizar status (concluído/pendente) ou texto
+app.put('/api/checklists/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { completed, text, category } = req.body;
+  try {
+    const fields = [];
+    const values = [];
+    let idx = 1;
+    if (completed !== undefined) { fields.push(`completed = $${idx++}`); values.push(completed); }
+    if (text !== undefined) { fields.push(`text = $${idx++}`); values.push(text); }
+    if (category !== undefined) { fields.push(`category = $${idx++}`); values.push(category); }
+    if (!fields.length) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE checklists SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Item não encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE - Remover um item
+app.delete('/api/checklists/:id', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM checklists WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Item removido' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE - Limpar todos os concluídos
 app.delete('/api/checklists-all/completed', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
   try {
@@ -1171,17 +1366,20 @@ app.delete('/api/checklists-all/completed', authenticateToken, requireOrganizado
 
 const asanaSyncState = {
   isRunning: false,
+  progress: 0,
+  total: 0,
   lastSyncAt: null,
   lastSyncCount: 0,
   lastSyncError: null,
 };
 
-const MIN_SYNC_INTERVAL_HOURS = 2; // Evita syncs automáticos excessivos
+const MIN_SYNC_INTERVAL_HOURS = 2;
 
-// GET /api/asana/sync/status - Retorna o estado atual da sincronização
 app.get('/api/asana/sync/status', authenticateToken, (req, res) => {
   res.json({
     isRunning: asanaSyncState.isRunning,
+    progress: asanaSyncState.progress,
+    total: asanaSyncState.total,
     lastSyncAt: asanaSyncState.lastSyncAt,
     lastSyncCount: asanaSyncState.lastSyncCount,
     lastSyncError: asanaSyncState.lastSyncError,
@@ -1189,7 +1387,6 @@ app.get('/api/asana/sync/status', authenticateToken, (req, res) => {
   });
 });
 
-// POST /api/asana/sync - Inicia a sincronização (apenas admin/organizador)
 app.post('/api/asana/sync', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
   const { asanaToken, workspaceId, force } = req.body;
   if (!asanaToken) return res.status(400).json({ error: 'Token do Asana é obrigatório' });
@@ -1198,7 +1395,6 @@ app.post('/api/asana/sync', authenticateToken, requireOrganizadorOrAdmin, async 
     return res.status(409).json({ error: 'Sincronização já em andamento' });
   }
 
-  // Verifica se o intervalo mínimo foi respeitado (a menos que seja forçado manualmente)
   if (!force && asanaSyncState.lastSyncAt) {
     const hoursSince = (Date.now() - new Date(asanaSyncState.lastSyncAt).getTime()) / 3600000;
     if (hoursSince < MIN_SYNC_INTERVAL_HOURS) {
@@ -1209,35 +1405,36 @@ app.post('/api/asana/sync', authenticateToken, requireOrganizadorOrAdmin, async 
     }
   }
 
-  // Responde imediatamente e inicia o processo em background
   res.json({ message: 'Sincronização iniciada' });
-  
   runAsanaSync(asanaToken, workspaceId).catch(err => {
-    console.error('❌ [Asana Sync Error]:', err.message);
+    console.error('❌ [Asana Sync bg Error]:', err.message);
   });
 });
 
 async function runAsanaSync(asanaToken, workspaceId) {
   asanaSyncState.isRunning = true;
+  asanaSyncState.progress = 0;
+  asanaSyncState.total = 0;
   asanaSyncState.lastSyncError = null;
-  console.log('🔄 [Asana Sync] Iniciando processamento...');
+  console.log('🚀 [Asana Sync] Iniciando sincronização paralela otimizada...');
 
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const asanaFetch = async (url) => {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${asanaToken}` } });
-    if (!res.ok) throw new Error(`Erro Asana: ${res.status}`);
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(`Asana: ${res.status} - ${errBody.errors?.[0]?.message || 'Erro'}`);
+    }
     return res.json();
   };
 
   try {
-    // 1. Buscar projetos
     const projectsUri = workspaceId 
-      ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=name,current_status.text,custom_fields,owner.name`
-      : `https://app.asana.com/api/1.0/projects?opt_fields=name,current_status.text,custom_fields,owner.name`;
+      ? `https://app.asana.com/api/1.0/workspaces/${workspaceId}/projects?opt_fields=gid,name,current_status.text,custom_fields,owner.name`
+      : `https://app.asana.com/api/1.0/projects?opt_fields=gid,name,current_status.text,custom_fields,owner.name`;
 
     const { data: asanaProjects } = await asanaFetch(projectsUri);
-    
-    // 2. Mapear Portfólios para Clientes (opcional mas útil)
+    asanaSyncState.total = asanaProjects.length;
+
     const projectToClient = {};
     try {
       const portfUri = workspaceId 
@@ -1245,47 +1442,75 @@ async function runAsanaSync(asanaToken, workspaceId) {
         : `https://app.asana.com/api/1.0/portfolios?owner=me&opt_fields=name,gid`;
       
       const { data: portfolios } = await asanaFetch(portfUri);
-      for (const p of portfolios) {
-        await sleep(400); // Respeita limite da API
-        const { data: items } = await asanaFetch(`https://app.asana.com/api/1.0/portfolios/${p.gid}/items?opt_fields=name`);
-        items.forEach(it => { projectToClient[it.gid] = p.name; });
+      
+      // Mapear portfólios em lotes de 5
+      for (let i = 0; i < portfolios.length; i += 5) {
+        const batch = portfolios.slice(i, i + 5);
+        await Promise.all(batch.map(async (p) => {
+          try {
+            const { data: items } = await asanaFetch(`https://app.asana.com/api/1.0/portfolios/${p.gid}/items?opt_fields=gid`);
+            items.forEach(it => { projectToClient[it.gid] = p.name; });
+          } catch (e) {}
+        }));
       }
     } catch (e) { console.warn('⚠️ Falha ao mapear portfólios'); }
 
     const getVal = (fields, name) => {
       const f = (fields || []).find(f => f.name.toLowerCase() === name.toLowerCase());
-      return f?.display_value || f?.text_value || f?.number_value || '---';
+      if (!f) return '---';
+      return f.display_value || f.text_value || (f.number_value !== undefined ? String(f.number_value) : '---');
     };
 
     let count = 0;
-    for (const ap of asanaProjects) {
-      await sleep(400); // 400ms entre requisições = ~150 req/min (limite seguro)
-      
-      let prog = 0;
-      try {
-        const { data: counts } = await asanaFetch(`https://app.asana.com/api/1.0/projects/${ap.gid}/task_counts?opt_fields=num_tasks,num_completed_tasks`);
-        if (counts.num_tasks > 0) prog = Math.round((counts.num_completed_tasks / counts.num_tasks) * 100);
-      } catch (e) {}
+    // Processar projetos em lotes de 10
+    for (let i = 0; i < asanaProjects.length; i += 10) {
+      const batch = asanaProjects.slice(i, i + 10);
+      await Promise.all(batch.map(async (ap) => {
+        try {
+          let prog = 0;
+          try {
+            const { data: counts } = await asanaFetch(`https://app.asana.com/api/1.0/projects/${ap.gid}/task_counts?opt_fields=num_tasks,num_completed_tasks`);
+            if (counts.num_tasks > 0) prog = Math.round((counts.num_completed_tasks / counts.num_tasks) * 100);
+          } catch (e) {}
 
-      const fields = ap.custom_fields || [];
-      const statusText = getVal(fields, 'Status Projeto') || ap.current_status?.text || '---';
+          const fields = ap.custom_fields || [];
+          const statusText = getVal(fields, 'Status Projeto') || ap.current_status?.text || '---';
+          const clientNameFromAsana = projectToClient[ap.gid] || '---';
 
-      await pool.query(`
-        INSERT INTO projects (priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-        ON CONFLICT (name) DO UPDATE SET
-          priority = EXCLUDED.priority, client_name = EXCLUDED.client_name,
-          progress = EXCLUDED.progress, status = EXCLUDED.status,
-          is_live = EXCLUDED.is_live, solution_hired = EXCLUDED.solution_hired,
-          analyst = EXCLUDED.analyst, whatsapp_group = EXCLUDED.whatsapp_group,
-          monthly_fee = EXCLUDED.monthly_fee, updated_at = CURRENT_TIMESTAMP
-      `, [
-        getVal(fields, 'Prioridade Projeto'), ap.name, projectToClient[ap.gid] || '---',
-        prog, statusText, statusText.toLowerCase().includes('live'),
-        getVal(fields, 'Solução Contratada'), getVal(fields, 'Analista Responsável') || ap.owner?.name || '---',
-        getVal(fields, 'Grupo Whatsapp'), Number(getVal(fields, 'Mensalidade')) || 0
-      ]);
-      count++;
+          await pool.query(`
+            INSERT INTO projects (asana_gid, priority, name, client_name, progress, status, is_live, solution_hired, analyst, whatsapp_group, monthly_fee)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+            ON CONFLICT (asana_gid) DO UPDATE SET
+              name = EXCLUDED.name,
+              priority = EXCLUDED.priority, 
+              client_name = CASE WHEN EXCLUDED.client_name != '---' THEN EXCLUDED.client_name ELSE projects.client_name END,
+              progress = EXCLUDED.progress, 
+              status = EXCLUDED.status,
+              is_live = EXCLUDED.is_live, 
+              solution_hired = EXCLUDED.solution_hired,
+              analyst = EXCLUDED.analyst, 
+              whatsapp_group = EXCLUDED.whatsapp_group,
+              monthly_fee = EXCLUDED.monthly_fee, 
+              updated_at = CURRENT_TIMESTAMP
+          `, [
+            ap.gid,
+            getVal(fields, 'Prioridade Projeto'), 
+            ap.name, 
+            clientNameFromAsana,
+            prog, 
+            statusText, 
+            statusText.toLowerCase().includes('live'),
+            getVal(fields, 'Solução Contratada'), 
+            getVal(fields, 'Analista Responsável') || ap.owner?.name || '---',
+            getVal(fields, 'Grupo Whatsapp'), 
+            Number(getVal(fields, 'Mensalidade')) || 0
+          ]);
+          count++;
+          asanaSyncState.progress = count;
+        } catch (e) {
+          console.error(`Erro no projeto ${ap.name}:`, e.message);
+        }
+      }));
     }
 
     asanaSyncState.lastSyncAt = new Date().toISOString();
@@ -1302,4 +1527,3 @@ async function runAsanaSync(asanaToken, workspaceId) {
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
-
