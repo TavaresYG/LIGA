@@ -571,6 +571,10 @@ const PreKickoffForm: React.FC<PreKickoffFormProps> = ({ initialData, onSave, on
             <div className="sig-row">
               <div className="sig-box">
                 <div className="sig-line"></div>
+                Laborat&oacute;rio / Respons&aacute;vel<br /><small>{data.responsavel || '___________________'}</small>
+              </div>
+              <div className="sig-box">
+                <div className="sig-line"></div>
                 Implantador Respons&aacute;vel<br /><small>{data.implantador || '___________________'}</small>
               </div>
               <div className="sig-box">

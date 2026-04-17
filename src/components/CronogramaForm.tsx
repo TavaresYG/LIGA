@@ -289,20 +289,41 @@ const CronogramaForm: React.FC<CronogramaFormProps> = ({ initialData, onSave, on
             </div>
           ))}
 
-          <div className="doc-footer" style={{ marginTop: '40px' }}>
-             <div className="sig-row">
+          <div className="doc-section doc-page-break" style={{ border: 'none', marginTop: '40px', pageBreakBefore: 'always' }}>
+            <div style={{ 
+              padding: '25px', 
+              background: '#f8fafc', 
+              border: '1px solid #e2e8f0', 
+              borderRadius: '12px',
+              marginBottom: '40px'
+            }}>
+              <h2 style={{ color: '#1e293b', marginBottom: '15px' }}>🤝 Compromisso de Implantação</h2>
+              <p style={{ fontSize: '12px', color: '#475569', lineHeight: '1.6', marginBottom: '10px' }}>
+                Com a assinatura deste documento, as partes confirmam estar alinhadas com as datas, fases e responsabilidades 
+                descritas neste cronograma. Nosso objetivo comum é garantir uma transição suave, autônoma e eficiente para 
+                a utilização plena do software LIGA no laboratório dentro dos prazos pactuados.
+              </p>
+            </div>
+
+            <div className="doc-footer" style={{ borderTop: 'none', marginTop: '0' }}>
+              <div className="sig-row">
                 <div className="sig-box">
                   <div className="sig-line"></div>
-                  Laborat&oacute;rio / Respons&aacute;vel
+                  Laborat&oacute;rio / Respons&aacute;vel<br /><small>{data.responsavel || '___________________'}</small>
                 </div>
                 <div className="sig-box">
                   <div className="sig-line"></div>
-                  Implantador Respons&aacute;vel
+                  Implantador Respons&aacute;vel<br /><small>{data.implantador || '___________________'}</small>
                 </div>
-             </div>
-             <div className="doc-footer-note">
-                Planejamento sujeito a alterações conforme andamento do projeto.
-             </div>
+                <div className="sig-box">
+                  <div className="sig-line"></div>
+                  Coordenador de Implanta&ccedil;&atilde;o<br /><small>Yuri Tavares Gon&ccedil;alves</small>
+                </div>
+              </div>
+              <div className="doc-footer-note">
+                Documento gerado em {hoje} &nbsp;|&nbsp; Uso interno &mdash; Implanta&ccedil;&atilde;o de Sistema Laboratorial
+              </div>
+            </div>
           </div>
         </div>
       </div>
