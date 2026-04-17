@@ -1357,6 +1357,31 @@ async function runAsanaSync(asanaToken, workspaceId) {
   } catch (err) { asanaSyncState.lastSyncError = err.message; } finally { asanaSyncState.isRunning = false; }
 }
 
+// ===================== IMPLANTADORES =====================
+
+app.get('/api/implantadores', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM implantadores ORDER BY name');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar implantadores' });
+  }
+});
+
+app.post('/api/implantadores', authenticateToken, async (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO implantadores (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING *',
+      [name]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao cadastrar implantador' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });

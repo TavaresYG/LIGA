@@ -12,6 +12,7 @@ import PointDistributionPage from './pages/PointDistributionPage'
 import BIPanel from './pages/BIPanel'
 import KickoffForm from './components/KickoffForm'
 import PreKickoffForm from './components/PreKickoffForm'
+import CronogramaForm from './components/CronogramaForm'
 import AdminPanel from './components/AdminPanel'
 import Dashboard from './components/Dashboard'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -25,7 +26,7 @@ import './App.css'
 import BASE_API_URL from './api/config';
 const API_URL = `${BASE_API_URL}/api`;
 
-type View = 'dashboard' | 'form' | 'kickoff' | 'ranking' | 'loja' | 'extrato' | 'goals' | 'projects' | 'portfolios' | 'checklist' | 'distribuicao' | 'bi';
+type View = 'dashboard' | 'form' | 'kickoff' | 'cronograma' | 'ranking' | 'loja' | 'extrato' | 'goals' | 'projects' | 'portfolios' | 'checklist' | 'distribuicao' | 'bi';
 
 function AppContent() {
   const { user, logout, loading, token } = useAuth()
@@ -52,8 +53,8 @@ function AppContent() {
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light')
 
   const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-    admin:      ['dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi'],
-    organizador:['dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'checklist', 'bi'],
+    admin:      ['dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi'],
+    organizador:['dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'checklist', 'bi'],
     member:     ['dashboard', 'ranking', 'loja', 'extrato', 'goals'],
   };
 
@@ -208,7 +209,7 @@ function AppContent() {
             {/* DOCUMENTOS DROPDOWN */}
             <div className="nav-dropdown">
               <button
-                className={`nav-btn ${(view === 'form' || view === 'kickoff') ? 'active' : ''}`}
+                className={`nav-btn ${(view === 'form' || view === 'kickoff' || view === 'cronograma') ? 'active' : ''}`}
                 onMouseEnter={() => setActiveDropdown('docs')}
                 onClick={() => setActiveDropdown(activeDropdown === 'docs' ? null : 'docs')}
               >
@@ -220,6 +221,7 @@ function AppContent() {
                 <div className="dropdown-menu" onMouseLeave={() => setActiveDropdown(null)}>
                   <button onClick={() => { setEditingDoc(null); handleNavClick('form'); }}>📋 Pré Kick Off</button>
                   <button onClick={() => { setEditingDoc(null); handleNavClick('kickoff'); }}>🚀 Kick Off</button>
+                  <button onClick={() => { setEditingDoc(null); handleNavClick('cronograma'); }}>📅 Cronograma</button>
                 </div>
               )}
             </div>
@@ -301,7 +303,12 @@ function AppContent() {
         {view === 'dashboard' && (
           <Dashboard
             onNewDoc={() => { setEditingDoc(null); setView('form'); }}
-            onViewDoc={(doc) => { setEditingDoc(doc); setView(doc.type === 'kickoff' ? 'kickoff' : 'form'); }}
+            onViewDoc={(doc) => { 
+                setEditingDoc(doc); 
+                if (doc.type === 'kickoff') setView('kickoff');
+                else if (doc.type === 'cronograma') setView('cronograma');
+                else setView('form');
+            }}
           />
         )}
         {view === 'form' && (
@@ -315,6 +322,13 @@ function AppContent() {
           <KickoffForm
             initialData={editingDoc?.data}
             onSave={(formData) => handleSave(formData, 'kickoff')}
+            onCancel={() => setView('dashboard')}
+          />
+        )}
+        {view === 'cronograma' && (
+          <CronogramaForm
+            initialData={editingDoc?.data}
+            onSave={(formData) => handleSave(formData, 'cronograma')}
             onCancel={() => setView('dashboard')}
           />
         )}

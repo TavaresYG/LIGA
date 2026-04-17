@@ -227,6 +227,15 @@ const initDb = async () => {
       console.log('Aviso na migração crítica de checklist:', e.message);
     }
 
+    // 13. Implantadores
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS implantadores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL UNIQUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log('✅ Banco de dados inicializado com sucesso (tabelas de gamificação incluídas).');
   } catch (err) {
     console.error('❌ Erro ao inicializar o banco de dados:', err.message);

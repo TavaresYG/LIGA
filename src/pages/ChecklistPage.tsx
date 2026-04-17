@@ -315,8 +315,8 @@ const ChecklistPage: React.FC = () => {
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1.5rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {(['Geral', 'Diário', 'Semanal', 'Projeto'] as const).map(cat => (
-                <button type="button" key={cat} onClick={() => setActiveCategory(cat === 'Todas' ? 'Geral' : cat)} style={{ padding: '0.4rem 0.8rem', borderRadius: '0.5rem', border: 'none', background: activeCategory === cat ? 'var(--accent)' : 'var(--bg-hover)', color: activeCategory === cat ? 'white' : 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', transition: '0.2s' }}>
+              {(['Todas', 'Geral', 'Diário', 'Semanal', 'Projeto'] as const).map(cat => (
+                <button type="button" key={cat} onClick={() => setActiveCategory(cat)} style={{ padding: '0.4rem 0.8rem', borderRadius: '0.5rem', border: 'none', background: activeCategory === cat ? 'var(--accent)' : 'var(--bg-hover)', color: activeCategory === cat ? 'white' : 'var(--text-muted)', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', transition: '0.2s' }}>
                   {cat}
                 </button>
               ))}

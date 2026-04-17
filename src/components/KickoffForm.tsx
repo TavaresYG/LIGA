@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import '../styles/form.css';
 import { FormData, SavedDoc, Risk, DaySchedule } from '../types';
-import { X, CheckCircle, FileSignature, Paperclip, Unlock, Plus, Trash2, FileText, ImageIcon } from 'lucide-react';
+import { X, CheckCircle, FileSignature, Paperclip, Unlock, Plus, Trash2, FileText, ImageIcon, UserPlus } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import BASE_API_URL from '../api/config';
+
+const API_URL = `${BASE_API_URL}/api`;
 
 interface KickoffFormProps {
   initialData?: FormData;
@@ -188,8 +192,47 @@ const defaultData: FormData = {
 };
 
 const KickoffForm: React.FC<KickoffFormProps> = ({ initialData, onSave, onCancel }) => {
+  const { token } = useAuth();
   const [data, setData] = useState<FormData>({ ...defaultData, ...initialData });
   const [mode, setMode] = useState<'form' | 'preview'>('form');
+  const [implantadores, setImplantadores] = useState<{ id: string, name: string }[]>([]);
+  const [showAddImp, setShowAddImp] = useState(false);
+  const [newImpName, setNewImpName] = useState('');
+
+  useEffect(() => {
+    if (token) {
+      fetch(`${API_URL}/implantadores`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.json())
+        .then(setImplantadores)
+        .catch(err => console.error('Erro ao buscar implantadores:', err));
+    }
+  }, [token]);
+
+  const handleAddImplantador = async () => {
+    if (!newImpName.trim() || !token) return;
+    try {
+      const res = await fetch(`${API_URL}/implantadores`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: newImpName })
+      });
+      if (res.ok) {
+        const newItem = await res.json();
+        setImplantadores(prev => [...prev, newItem].sort((a, b) => a.name.localeCompare(b.name)));
+        setData({ ...data, implantador: newItem.name });
+        setNewImpName('');
+        setShowAddImp(false);
+      } else {
+        const err = await res.json();
+        alert('Erro ao cadastrar: ' + (err.error || 'Erro desconhecido'));
+      }
+    } catch (err) {
+      alert('Erro ao cadastrar implantador');
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { id, value } = e.target;
@@ -453,7 +496,58 @@ const KickoffForm: React.FC<KickoffFormProps> = ({ initialData, onSave, onCancel
           </div>
           <div className="form-row full">
             <div className="field"><label>Implantador Responsável</label>
-              <input id="f_implantador" type="text" value={data.implantador} onChange={handleChange} placeholder="Seu nome" />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {!showAddImp ? (
+                  <>
+                    <select 
+                      id="f_implantador" 
+                      value={data.implantador} 
+                      onChange={handleChange}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="">Selecione um implantador...</option>
+                      {implantadores.map(imp => (
+                        <option key={imp.id} value={imp.name}>{imp.name}</option>
+                      ))}
+                    </select>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowAddImp(true)} 
+                      className="btn-add-lite" 
+                      style={{ padding: '8px', background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534' }}
+                      title="Cadastrar novo implantador"
+                    >
+                      <UserPlus size={18} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <input 
+                      type="text" 
+                      value={newImpName} 
+                      onChange={(e) => setNewImpName(e.target.value)}
+                      placeholder="Nome do novo implantador"
+                      style={{ flex: 1 }}
+                      autoFocus
+                    />
+                    <button 
+                      type="button" 
+                      onClick={handleAddImplantador} 
+                      className="btn-primary" 
+                      style={{ padding: '8px 16px', background: '#166534', minHeight: 'auto' }}
+                    >
+                      Salvar
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => { setShowAddImp(false); setNewImpName(''); }} 
+                      style={{ padding: '8px', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -109,11 +109,27 @@ export interface FormData {
   horario_setor: string;
   base_padrao: string;
   documentos_adicionais: Array<{ id: string, name: string, type: 'pdf' | 'image', url: string }>;
+  
+  // Cronograma fields
+  cron_inicio_projeto: string;
+  cron_virada_prevista: string;
+  cron_duracao_total: string;
+  cron_fases: CronogramaFase[];
+}
+
+export interface CronogramaFase {
+  id: string;
+  nome: string;
+  descricao: string;
+  data_inicio: string;
+  data_fim: string;
+  itens_impl: string[];
+  itens_cliente: string[];
 }
 
 export interface SavedDoc {
   id: string;
-  type: 'pre-kickoff' | 'kickoff';
+  type: 'pre-kickoff' | 'kickoff' | 'cronograma';
   clientName: string;
   date: string;
   implantador: string;

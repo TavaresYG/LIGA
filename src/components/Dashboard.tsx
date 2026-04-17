@@ -123,7 +123,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNewDoc, onViewDoc }) => {
                   <td>
                     <div className="doc-type">
                       <div className="icon-box"><FileText size={18} /></div>
-                      <span style={{ fontWeight: 600 }}>{doc.type === 'kickoff' ? 'Kick-Off' : 'Pré Kick-Off'}</span>
+                      <span style={{ fontWeight: 600 }}>
+                        {doc.type === 'kickoff' ? 'Kick-Off' : doc.type === 'cronograma' ? 'Cronograma' : 'Pré Kick-Off'}
+                      </span>
                     </div>
                   </td>
                   <td>{doc.clientName}</td>
