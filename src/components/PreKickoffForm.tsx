@@ -91,6 +91,10 @@ const defaultData: FormData = {
   rotina_envio_emails: '',
   rotina_envio_whatsapps: '',
   rotina_envio_outro: '',
+  cron_inicio_projeto: '',
+  cron_virada_prevista: '',
+  cron_duracao_total: '',
+  cron_fases: []
 };
 
 const DAYS = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];

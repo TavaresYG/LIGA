@@ -189,6 +189,10 @@ const defaultData: FormData = {
   horario_setor: '07:30 até 16:00',
   base_padrao: 'Fornecemos uma base padrão de implantação com aproximadamente 1000 exames, sendo 350 exames pré-configurados, incluindo laudos internos com metodologia, nome dos exames, mnemônicos padrões e referências atualizadas com base no Hermes Pardini (que foram recentemente revisadas).\n\nEsses 350 exames vêm preparados para ativação imediata, com a integração pronta faltando somente ajusar as credenciais de Web Service caso seja necessário o envio para o laboratório de apoio, basta o laboratório selecionar os que serão enviados para o apoio e escolher o formato de retorno dos resultados (descritivo ou PDF);\n\nOBS: Para os exames produzidor internamente, caso usem analisadores ou reagentes diferentes que impactem nos valores de referências, nós definimos em conjunto com o laboratório os usuários que terão acesso para poder ajustar as referências específicas conforme necessário (Nessa parte é recomendado que sejam poucas pessoas com esse nível de acesso)',
   documentos_adicionais: [],
+  cron_inicio_projeto: '',
+  cron_virada_prevista: '',
+  cron_duracao_total: '',
+  cron_fases: []
 };
 
 const KickoffForm: React.FC<KickoffFormProps> = ({ initialData, onSave, onCancel }) => {
