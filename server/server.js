@@ -195,11 +195,11 @@ app.get('/api/documents', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/documents', authenticateToken, async (req, res) => {
-  const { type, clientName, date, implantador, data } = req.body;
+  const { type, client_name, date, implantador, data } = req.body;
   try {
     const result = await pool.query(
       'INSERT INTO documents (user_id, type, client_name, date, implantador, data) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [req.user.id, type || 'pre-kickoff', clientName, date, implantador, data]
+      [req.user.id, type || 'pre-kickoff', client_name || data?.nome, date, implantador, data]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -209,11 +209,11 @@ app.post('/api/documents', authenticateToken, async (req, res) => {
 
 app.put('/api/documents/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { clientName, date, implantador, data } = req.body;
+  const { client_name, date, implantador, data } = req.body;
   try {
     const result = await pool.query(
       'UPDATE documents SET client_name = $1, date = $2, implantador = $3, data = $4 WHERE id = $5 AND user_id = $6 RETURNING *',
-      [clientName, date, implantador, data, id, req.user.id]
+      [client_name || data?.nome, date, implantador, data, id, req.user.id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Documento não encontrado ou sem permissão' });
     res.json(result.rows[0]);
