@@ -611,6 +611,47 @@ const CronogramaForm: React.FC<CronogramaFormProps> = ({ initialData, onSave, on
         </div>
       </div>
 
+      <div className="card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+        <div className="card-header"><span className="icon">🤝</span><h2>Fechamento do Cronograma</h2></div>
+        <div className="card-body">
+          <p style={{ fontSize: '13px', color: '#475569', lineHeight: '1.6', marginBottom: '20px' }}>
+            Esta seção abaixo é um resumo do compromisso entre as partes e aparecerá automaticamente na folha de assinaturas do seu PDF final.
+          </p>
+          
+          <div style={{ padding: '20px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+            <h3 style={{ color: '#1e293b', marginBottom: '10px', fontSize: '16px' }}>🤝 Compromisso de Implantação</h3>
+            <p style={{ fontSize: '12px', color: '#475569', lineHeight: '1.5', marginBottom: '15px' }}>
+              Com a assinatura deste documento, as partes confirmam estar alinhadas com as datas, fases e responsabilidades 
+              descritas neste cronograma. Nosso objetivo comum é garantir uma transição suave, autônoma e eficiente para 
+              a utilização plena do software LIGA no laboratório dentro dos prazos pactuados.
+            </p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', borderTop: '1px solid #f1f5f9', paddingTop: '15px' }}>
+              <div>
+                <h4 style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748b', marginBottom: '12px' }}>✍️ Assinaturas Previstas</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '11px', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle size={14} color="#166534" /> <span>Responsável pelo Laboratório</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle size={14} color="#166534" /> <span>Implantador Responsável</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle size={14} color="#166534" /> <span>Coordenador (Yuri Tavares)</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '20px' }}>
+                <h4 style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748b', marginBottom: '8px' }}>💡 Nota</h4>
+                <p style={{ margin: 0, fontSize: '11px', color: '#1e293b', lineHeight: '1.4' }}>
+                  O cronograma é a bússola do projeto. O cumprimento das datas depende do engajamento mútuo entre as equipes.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="actions">
         <button className="btn-back" style={{ padding: '12px 24px', marginRight: 'auto' }} onClick={onCancel}>Cancelar</button>
         <button className="btn-preview" onClick={() => setMode('preview')}>👁️ Prévia</button>
