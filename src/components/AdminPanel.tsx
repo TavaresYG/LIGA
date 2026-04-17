@@ -277,18 +277,20 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
     { key: 'integrations', label: 'Integrações',      icon: <Link size={18} />,         minRole: 'admin' },
   ];
   const visibleTabs = allTabs.filter(t => {
-    // If it's a super admin, show everything
+    // Se for o admin master, mostra tudo
     if (role === 'admin') return true;
+
+    // Se o perfil tiver a permissão explícita de 'admin_panel', mostramos as abas administrativas
+    if (permissions.includes('admin_panel')) {
+      // O 'organizador' padrão só vê o registro, mas perfis customizados com admin_panel 
+      // geralmente precisam de acesso completo ao que foi liberado.
+      // Para simplificar e atender seu pedido de "acesso ao painel", vou liberar as abas
+      // se ele tiver a permissão.
+      return true;
+    }
     
-    // If they have the admin_panel permission, we can check for more specific ones
-    // For now, let's keep it simple: 
-    // admin sees all. 
-    // organizador sees registry. 
-    // others with admin_panel see registry (as a baseline for custom roles)
+    // Fallback para o organizador padrão (legado)
     if (role === 'organizador' && t.key === 'registry') return true;
-    
-    // Custom roles logic: if they have the specific permission, or just registry as default
-    if (t.key === 'registry') return true;
 
     return false;
   });
