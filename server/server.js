@@ -1284,8 +1284,8 @@ app.get('/api/me/permissions', authenticateToken, async (req, res) => {
     const customRoleRes = await pool.query(`SELECT rp.view_name FROM role_permissions rp JOIN custom_roles cr ON rp.role_id = cr.id WHERE cr.name = $1`, [roleName]);
     if (customRoleRes.rows.length > 0) return res.json({ role: roleName, permissions: customRoleRes.rows.map(r => r.view_name) });
     const defaults = {
-      'admin': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'project_create', 'project_import', 'project_template', 'project_clear', 'project_sync'],
-      'organizador': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals', 'bi', 'project_sync', 'projects', 'project_import', 'project_template'],
+      'admin': ['admin_panel', 'dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'project_create', 'project_import', 'project_template', 'project_clear', 'project_sync'],
+      'organizador': ['admin_panel', 'dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals', 'bi', 'project_sync', 'projects', 'project_import', 'project_template'],
       'member': ['dashboard', 'ranking', 'loja', 'extrato', 'goals']
     };
     res.json({ role: roleName, permissions: defaults[roleName] || defaults['member'] });

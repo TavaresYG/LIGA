@@ -22,6 +22,7 @@ interface StoreItem { id: string; name: string; cost_points: number; stock: numb
 interface CustomRole { id: string; name: string; permissions: string[]; }
 
 const ALL_VIEWS = [
+  { id: 'admin_panel', label: '⚙️ Painel do Administrador', type: 'view' },
   { id: 'dashboard',   label: '📊 Dashboard', type: 'view' },
   { id: 'form',        label: '📋 Pré Kick Off', type: 'view' },
   { id: 'kickoff',     label: '🚀 Kick Off', type: 'view' },
@@ -45,12 +46,12 @@ const DEFAULT_ROLES: CustomRole[] = [
   {
     id: 'default-admin',
     name: 'Admin',
-    permissions: ['dashboard','form','kickoff','ranking','loja','extrato','goals','projects','portfolios','checklist','distribuicao', 'bi']
+    permissions: ['admin_panel', 'dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi']
   },
   {
     id: 'default-organizador',
     name: 'Organizador',
-    permissions: ['dashboard','form','kickoff','ranking','loja','extrato','goals','checklist', 'bi']
+    permissions: ['admin_panel', 'dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'checklist', 'bi']
   },
   {
     id: 'default-member',
@@ -59,7 +60,7 @@ const DEFAULT_ROLES: CustomRole[] = [
   },
 ];
 
-const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onClose }) => {
+const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () => void }> = ({ role, permissions, onClose }) => {
   const { token } = useAuth();
   const [tab, setTab] = useState<AdminTab>(role === 'organizador' ? 'registry' : 'meta');
   const [users, setUsers] = useState<User[]>([]);
@@ -276,8 +277,19 @@ const AdminPanel: React.FC<{ role: string; onClose: () => void }> = ({ role, onC
     { key: 'integrations', label: 'Integrações',      icon: <Link size={18} />,         minRole: 'admin' },
   ];
   const visibleTabs = allTabs.filter(t => {
+    // If it's a super admin, show everything
     if (role === 'admin') return true;
+    
+    // If they have the admin_panel permission, we can check for more specific ones
+    // For now, let's keep it simple: 
+    // admin sees all. 
+    // organizador sees registry. 
+    // others with admin_panel see registry (as a baseline for custom roles)
     if (role === 'organizador' && t.key === 'registry') return true;
+    
+    // Custom roles logic: if they have the specific permission, or just registry as default
+    if (t.key === 'registry') return true;
+
     return false;
   });
 

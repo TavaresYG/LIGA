@@ -53,8 +53,8 @@ function AppContent() {
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light')
 
   const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-    admin:      ['dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi'],
-    organizador:['dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'checklist', 'bi'],
+    admin:      ['admin_panel', 'dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi'],
+    organizador:['admin_panel', 'dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'checklist', 'bi'],
     member:     ['dashboard', 'ranking', 'loja', 'extrato', 'goals'],
   };
 
@@ -113,7 +113,7 @@ function AppContent() {
     const roleKey = (userRole || 'member').toLowerCase();
     return (DEFAULT_PERMISSIONS[roleKey] || DEFAULT_PERMISSIONS['member']).includes(v);
   };
-  const canAccessAdmin = userRole === 'admin' || userRole === 'organizador';
+  const canAccessAdmin = hasPerm('admin_panel');
 
   const handleNavClick = (v: View) => {
     setView(v);
@@ -343,7 +343,7 @@ function AppContent() {
         {view === 'bi' && <BIPanel />}
       </main>
 
-      {showAdmin && <AdminPanel role={userRole} onClose={() => setShowAdmin(false)} />}
+      {showAdmin && <AdminPanel role={userRole} permissions={permissions} onClose={() => setShowAdmin(false)} />}
     </div>
   )
 }
