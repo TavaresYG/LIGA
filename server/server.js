@@ -1277,6 +1277,15 @@ app.post('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) =
   } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }); } finally { client.release(); }
 });
 
+app.delete('/api/admin/roles/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM custom_roles WHERE id = $1', [req.params.id]);
+    res.json({ message: 'Perfil excluído com sucesso' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao excluir perfil: ' + err.message });
+  }
+});
+
 app.get('/api/me/permissions', authenticateToken, async (req, res) => {
   try {
     const roleRes = await pool.query('SELECT role FROM user_roles WHERE user_id = $1', [req.user.id]);

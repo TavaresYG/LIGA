@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   Target, Edit3, Clock, Store, Star, Package, Gift, X,
   ChevronRight, Settings, LayoutDashboard, Users, Link,
-  CheckCircle2, XCircle, Loader2, ShieldCheck, Eye, Lock
+  CheckCircle2, XCircle, Loader2, ShieldCheck, Eye, Lock, Trash2
 } from 'lucide-react';
 import '../styles/admin.css';
 
@@ -22,10 +22,11 @@ interface StoreItem { id: string; name: string; cost_points: number; stock: numb
 interface CustomRole { id: string; name: string; permissions: string[]; }
 
 const ALL_VIEWS = [
-  { id: 'admin_panel', label: '⚙️ Painel do Administrador', type: 'view' },
+  { id: 'admin_panel', label: '⚙️ Painel do Administrador (Geral)', type: 'view' },
   { id: 'dashboard',   label: '📊 Dashboard', type: 'view' },
   { id: 'form',        label: '📋 Pré Kick Off', type: 'view' },
   { id: 'kickoff',     label: '🚀 Kick Off', type: 'view' },
+  { id: 'cronograma',  label: '📅 Cronograma', type: 'view' },
   { id: 'ranking',     label: '🏆 Ranking', type: 'view' },
   { id: 'loja',        label: '🛍️ Loja de Prêmios', type: 'view' },
   { id: 'extrato',     label: '📜 Meu Extrato', type: 'view' },
@@ -35,6 +36,18 @@ const ALL_VIEWS = [
   { id: 'checklist',   label: '📋 Checklist Equipe', type: 'view' },
   { id: 'distribuicao',label: '⚖️ Distribuição de Pontos', type: 'view' },
   { id: 'bi',          label: '📊 Painel BI', type: 'view' },
+  
+  { id: 'adm_meta',    label: '⚙️ Tab: Metas', type: 'admin' },
+  { id: 'adm_points',  label: '⚙️ Tab: Lançar Pontos', type: 'admin' },
+  { id: 'adm_pending', label: '⚙️ Tab: Pendentes', type: 'admin' },
+  { id: 'adm_store',   label: '⚙️ Tab: Loja (Adm)', type: 'admin' },
+  { id: 'adm_bonus',   label: '⚙️ Tab: Bônus', type: 'admin' },
+  { id: 'adm_redempt', label: '⚙️ Tab: Resgates', type: 'admin' },
+  { id: 'adm_users',   label: '⚙️ Tab: Usuários', type: 'admin' },
+  { id: 'adm_roles',   label: '⚙️ Tab: Perfis de Acesso', type: 'admin' },
+  { id: 'adm_prize',   label: '⚙️ Tab: Prêmio Mensal', type: 'admin' },
+  { id: 'adm_integ',   label: '⚙️ Tab: Integrações', type: 'admin' },
+
   { id: 'project_create', label: '➕ Incluir novos projetos', type: 'action' },
   { id: 'project_import',  label: '📤 Importar planilha', type: 'action' },
   { id: 'project_template',label: '📥 Baixar modelo XLS', type: 'action' },
@@ -46,12 +59,12 @@ const DEFAULT_ROLES: CustomRole[] = [
   {
     id: 'default-admin',
     name: 'Admin',
-    permissions: ['admin_panel', 'dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi']
+    permissions: ['admin_panel', 'dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'adm_meta', 'adm_points', 'adm_pending', 'adm_store', 'adm_bonus', 'adm_redempt', 'adm_users', 'adm_roles', 'adm_prize', 'adm_integ']
   },
   {
     id: 'default-organizador',
     name: 'Organizador',
-    permissions: ['admin_panel', 'dashboard', 'form', 'kickoff', 'ranking', 'loja', 'extrato', 'goals', 'checklist', 'bi']
+    permissions: ['admin_panel', 'dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'checklist', 'bi', 'adm_points']
   },
   {
     id: 'default-member',
@@ -60,7 +73,7 @@ const DEFAULT_ROLES: CustomRole[] = [
   },
 ];
 
-const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () => void }> = ({ role, permissions, onClose }) => {
+const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () => void }> = ({ role, permissions: userPermissions, onClose }) => {
   const { token } = useAuth();
   const [tab, setTab] = useState<AdminTab>(role === 'organizador' ? 'registry' : 'meta');
   const [users, setUsers] = useState<User[]>([]);
@@ -145,6 +158,12 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
     setIsSavingRole(false);
   };
   const editRole = (r: CustomRole) => setRoleForm({ id: r.id, name: r.name, permissions: new Set(r.permissions) });
+  const deleteRole = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir este perfil?')) return;
+    const { ok } = await api(`/admin/roles/${id}`, { method: 'DELETE', headers: h() });
+    if (ok) { showMsg('🗑️ Perfil excluído'); fetchCustomRoles(); }
+    else showMsg('❌ Erro ao excluir perfil');
+  };
 
   // All roles to display: defaults + custom (filter out custom if same name as default)
   const allRolesToShow = [
@@ -264,34 +283,25 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
   };
 
   // ---- Tabs ----
-  const allTabs: { key: AdminTab; label: string; icon: React.ReactNode; minRole: string }[] = [
-    { key: 'meta',         label: 'Metas',            icon: <Target size={18} />,       minRole: 'admin' },
-    { key: 'registry',     label: 'Lançar Pontos',    icon: <Edit3 size={18} />,        minRole: 'organizador' },
-    { key: 'pending',      label: 'Pendentes',        icon: <Clock size={18} />,        minRole: 'admin' },
-    { key: 'store',        label: 'Loja',             icon: <Store size={18} />,        minRole: 'admin' },
-    { key: 'bonuses',      label: 'Bônus',            icon: <Star size={18} />,         minRole: 'admin' },
-    { key: 'redemptions',  label: 'Resgates',         icon: <Package size={18} />,      minRole: 'admin' },
-    { key: 'users',        label: 'Usuários',         icon: <Users size={18} />,        minRole: 'admin' },
-    { key: 'roles',        label: 'Perfis de Acesso', icon: <ShieldCheck size={18} />,  minRole: 'admin' },
-    { key: 'prize',        label: 'Prêmio Mensal',    icon: <Gift size={18} />,         minRole: 'admin' },
-    { key: 'integrations', label: 'Integrações',      icon: <Link size={18} />,         minRole: 'admin' },
+  const allTabs: { key: AdminTab; label: string; icon: React.ReactNode; perm: string }[] = [
+    { key: 'meta',         label: 'Metas',            icon: <Target size={18} />,       perm: 'adm_meta' },
+    { key: 'registry',     label: 'Lançar Pontos',    icon: <Edit3 size={18} />,        perm: 'adm_points' },
+    { key: 'pending',      label: 'Pendentes',        icon: <Clock size={18} />,        perm: 'adm_pending' },
+    { key: 'store',        label: 'Loja',             icon: <Store size={18} />,        perm: 'adm_store' },
+    { key: 'bonuses',      label: 'Bônus',            icon: <Star size={18} />,         perm: 'adm_bonus' },
+    { key: 'redemptions',  label: 'Resgates',         icon: <Package size={18} />,      perm: 'adm_redempt' },
+    { key: 'users',        label: 'Usuários',         icon: <Users size={18} />,         perm: 'adm_users' },
+    { key: 'roles',        label: 'Perfis de Acesso', icon: <ShieldCheck size={18} />,  perm: 'adm_roles' },
+    { key: 'prize',        label: 'Prêmio Mensal',    icon: <Gift size={18} />,         perm: 'adm_prize' },
+    { key: 'integrations', label: 'Integrações',      icon: <Link size={18} />,         perm: 'adm_integ' },
   ];
   const visibleTabs = allTabs.filter(t => {
-    // Se for o admin master, mostra tudo
     if (role === 'admin') return true;
-
-    // Se o perfil tiver a permissão explícita de 'admin_panel', mostramos as abas administrativas
-    if (permissions.includes('admin_panel')) {
-      // O 'organizador' padrão só vê o registro, mas perfis customizados com admin_panel 
-      // geralmente precisam de acesso completo ao que foi liberado.
-      // Para simplificar e atender seu pedido de "acesso ao painel", vou liberar as abas
-      // se ele tiver a permissão.
-      return true;
-    }
+    if (userPermissions.includes(t.perm)) return true;
     
-    // Fallback para o organizador padrão (legado)
+    // Fallback for organizers
     if (role === 'organizador' && t.key === 'registry') return true;
-
+    
     return false;
   });
 
@@ -353,7 +363,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
                     {/* Bloco de Telas */}
                     <div style={{ marginBottom: '1.5rem' }}>
                       <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🖥️ Acesso às Telas</h4>
-                      <div className="permissions-grid" style={{ display: 'grid', gap: '0.75rem' }}>
+                      <div className="permissions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
                         {ALL_VIEWS.filter(v => v.type === 'view').map(v => (
                           <div
                             key={v.id}
@@ -372,10 +382,32 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
                       </div>
                     </div>
 
+                    {/* Bloco de Abas Admin */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                      <h4 style={{ fontSize: '0.85rem', color: '#166534', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🛠️ Menus do Painel de Administrador</h4>
+                      <div className="permissions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                        {ALL_VIEWS.filter(v => v.type === 'admin').map(v => (
+                          <div
+                            key={v.id}
+                            onClick={() => togglePermission(v.id)}
+                            style={{
+                              padding: '0.75rem 1rem', borderRadius: '0.75rem', cursor: 'pointer', transition: 'all 0.2s',
+                              display: 'flex', alignItems: 'center', gap: '0.75rem',
+                              border: `1px solid ${roleForm.permissions.has(v.id) ? '#166534' : 'var(--border-color)'}`,
+                              background: roleForm.permissions.has(v.id) ? 'rgba(22,101,52,0.08)' : 'var(--bg-page)',
+                            }}
+                          >
+                            {roleForm.permissions.has(v.id) ? <Settings size={18} color="#166534" /> : <Lock size={18} color="var(--text-muted)" />}
+                            <span style={{ fontSize: '0.85rem', fontWeight: roleForm.permissions.has(v.id) ? '700' : '500', color: roleForm.permissions.has(v.id) ? 'var(--text-heading)' : 'var(--text-main)' }}>{v.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* Bloco de Ações */}
                     <div>
                       <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>⚙️ Ações e Botões Permitidos</h4>
-                      <div className="permissions-grid" style={{ display: 'grid', gap: '0.75rem' }}>
+                      <div className="permissions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
                         {ALL_VIEWS.filter(v => v.type === 'action').map(v => (
                           <div
                             key={v.id}
@@ -418,9 +450,14 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
                             <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>{cr.name}</h4>
                             {isDefault && <span style={{ fontSize: '0.65rem', padding: '2px 8px', background: 'var(--accent)', color: 'white', borderRadius: '999px', fontWeight: '700' }}>PADRÃO</span>}
                           </div>
-                          {!isDefault && (
-                            <button onClick={() => editRole(cr)} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer' }}><Edit3 size={16} /></button>
-                          )}
+                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            {!isDefault && (
+                              <>
+                                <button onClick={() => editRole(cr)} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer' }} title="Editar"><Edit3 size={16} /></button>
+                                <button onClick={() => deleteRole(cr.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }} title="Excluir"><Trash2 size={16} /></button>
+                              </>
+                            )}
+                          </div>
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                           {cr.permissions.map(p => (
@@ -436,7 +473,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
               </div>
             )}
 
-            {/* ── USUÁRIOS ── */}
+            {/* Rest of the component tabs (Metas, Users, etc) remain same... */}
             {tab === 'users' && role === 'admin' && (
               <div>
                 <h3 className="admin-section-title">Adicionar Novo Membro</h3>
@@ -486,7 +523,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
               </div>
             )}
 
-            {/* ── METAS ── */}
+            {/* METAS */}
             {tab === 'meta' && role === 'admin' && (
               <div>
                 <h3 className="admin-section-title">Criar Nova Meta de Pontuação</h3>
@@ -517,7 +554,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
               </div>
             )}
 
-            {/* ── LANÇAR PONTOS ── */}
+            {/* LANÇAR PONTOS */}
             {tab === 'registry' && (
               <div>
                 <h3 className="admin-section-title">Registrar Conclusão de Meta (Lançar Pontos)</h3>
@@ -541,7 +578,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
               </div>
             )}
 
-            {/* ── PENDENTES ── */}
+            {/* PENDENTES */}
             {tab === 'pending' && role === 'admin' && (
               <div>
                 <h3 className="admin-section-title">Aprovação de Lançamentos</h3>
@@ -565,7 +602,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
               </div>
             )}
 
-            {/* ── LOJA ── */}
+            {/* LOJA */}
             {tab === 'store' && role === 'admin' && (
               <div>
                 <h3 className="admin-section-title">Loja: Adicionar Item</h3>
@@ -591,7 +628,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
               </div>
             )}
 
-            {/* ── BÔNUS ── */}
+            {/* BÔNUS */}
             {tab === 'bonuses' && role === 'admin' && (
               <div>
                 <h3 className="admin-section-title">Conceder Bônus Manual</h3>
@@ -609,7 +646,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
               </div>
             )}
 
-            {/* ── RESGATES ── */}
+            {/* RESGATES */}
             {tab === 'redemptions' && role === 'admin' && (
               <div>
                 <h3 className="admin-section-title">Resgates Solicitados</h3>
@@ -628,7 +665,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
               </div>
             )}
 
-            {/* ── PRÊMIO MENSAL ── */}
+            {/* PRÊMIO MENSAL */}
             {tab === 'prize' && role === 'admin' && (
               <div>
                 <h3 className="admin-section-title">Prêmio Mensal em Destaque</h3>
@@ -642,7 +679,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
               </div>
             )}
 
-            {/* ── INTEGRAÇÕES ── */}
+            {/* INTEGRAÇÕES */}
             {tab === 'integrations' && role === 'admin' && (
               <div>
                 <h3 className="admin-section-title">Integrações de Sistemas</h3>
