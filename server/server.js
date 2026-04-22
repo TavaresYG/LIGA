@@ -3,6 +3,8 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { pool, initDb } = require('./db');
 
@@ -13,6 +15,24 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 initDb();
+
+// Multer Setup for File Uploads
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
+
+app.use('/uploads', express.static(uploadsDir));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -68,7 +88,7 @@ const hasPermission = async (userId, permission) => {
     if (customRoleRes.rows.length > 0) return true;
     const defaults = {
       'admin': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'project_create', 'project_import', 'project_template', 'project_clear', 'project_sync'],
-      'organizador': ['dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals', 'bi', 'project_sync', 'projects', 'project_import', 'project_template'],
+      'organizador': ['admin_panel', 'dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'project_sync', 'project_import', 'project_template', 'adm_meta', 'adm_points', 'adm_pending'],
       'member': ['dashboard', 'ranking', 'loja', 'extrato', 'goals']
     };
     return (defaults[roleName] || []).includes(permission);
@@ -399,15 +419,20 @@ app.put('/api/task-types/:id', authenticateToken, requireAdmin, async (req, res)
 // ===================== TASK COMPLETIONS =====================
 
 // Admin or Organizer registers a task completion for a member
-app.post('/api/task-completions', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
+app.post('/api/task-completions', authenticateToken, requireOrganizadorOrAdmin, upload.array('files'), async (req, res) => {
   const { userId, taskTypeId, notes } = req.body;
+  const files = req.files ? req.files.map(f => ({ 
+    name: f.originalname, 
+    path: `/uploads/${f.filename}` 
+  })) : [];
+
   try {
     const taskResult = await pool.query('SELECT points FROM task_types WHERE id = $1', [taskTypeId]);
     if (taskResult.rows.length === 0) return res.status(404).json({ error: 'Tarefa não encontrada' });
     const points = taskResult.rows[0].points;
     const result = await pool.query(
-      'INSERT INTO task_completions (user_id, task_type_id, points_awarded, status, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [userId, taskTypeId, points, 'pending', notes || null]
+      'INSERT INTO task_completions (user_id, task_type_id, points_awarded, status, notes, attachments) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [userId, taskTypeId, points, 'pending', notes || null, JSON.stringify(files)]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -415,29 +440,30 @@ app.post('/api/task-completions', authenticateToken, requireOrganizadorOrAdmin, 
   }
 });
 
-// Batch register task completions
-app.post('/api/task-completions/batch', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
-  const { userId, completions, notes } = req.body; // completions is [{ taskTypeId, points }]
+// Admin or Organizer registers a manual point distribution with attachments
+app.post('/api/task-completions/manual', authenticateToken, requireOrganizadorOrAdmin, upload.array('files'), async (req, res) => {
+  const { userId, notes, points } = req.body;
+  const files = req.files ? req.files.map(f => ({ 
+    name: f.originalname, 
+    path: `/uploads/${f.filename}` 
+  })) : [];
+
   try {
-    const results = [];
-    for (const comp of completions) {
-      const result = await pool.query(
-        'INSERT INTO task_completions (user_id, task_type_id, points_awarded, status, notes) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [userId, comp.taskTypeId, comp.points, 'pending', notes || null]
-      );
-      results.push(result.rows[0]);
-    }
-    res.status(201).json(results);
+    const result = await pool.query(
+      'INSERT INTO task_completions (user_id, task_type_id, points_awarded, status, notes, attachments) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [userId, null, parseInt(points) || 0, 'pending', notes || null, JSON.stringify(files)]
+    );
+    res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao registrar tarefas em lote: ' + err.message });
+    res.status(500).json({ error: 'Erro ao registrar distribuição: ' + err.message });
   }
 });
 
-// Get pending task completions (admin)
-app.get('/api/task-completions/pending', authenticateToken, requireAdmin, async (req, res) => {
+// Get pending task completions (admin or organizador)
+app.get('/api/task-completions/pending', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT tc.*, u.name AS user_name, tt.name AS task_name
+      SELECT tc.*, u.name AS user_name, COALESCE(tt.name, 'Distribuição Checklist') AS task_name
       FROM task_completions tc
       JOIN users u ON u.id = tc.user_id
       LEFT JOIN task_types tt ON tt.id = tc.task_type_id
@@ -453,7 +479,7 @@ app.get('/api/task-completions/pending', authenticateToken, requireAdmin, async 
 app.get('/api/me/task-completions/pending', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT tc.*, tt.name AS task_name
+      SELECT tc.*, COALESCE(tt.name, 'Distribuição Checklist') AS task_name
       FROM task_completions tc
       LEFT JOIN task_types tt ON tt.id = tc.task_type_id
       WHERE tc.user_id = $1 AND tc.status = 'pending' ORDER BY tc.created_at DESC
@@ -1293,8 +1319,8 @@ app.get('/api/me/permissions', authenticateToken, async (req, res) => {
     const customRoleRes = await pool.query(`SELECT rp.view_name FROM role_permissions rp JOIN custom_roles cr ON rp.role_id = cr.id WHERE cr.name = $1`, [roleName]);
     if (customRoleRes.rows.length > 0) return res.json({ role: roleName, permissions: customRoleRes.rows.map(r => r.view_name) });
     const defaults = {
-      'admin': ['admin_panel', 'dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'project_create', 'project_import', 'project_template', 'project_clear', 'project_sync'],
-      'organizador': ['admin_panel', 'dashboard', 'form', 'ranking', 'loja', 'extrato', 'goals', 'bi', 'project_sync', 'projects', 'project_import', 'project_template'],
+      'admin': ['admin_panel', 'dashboard', 'form', 'ranking', 'loja', 'extrato', 'kickoff', 'cronograma', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'project_create', 'project_import', 'project_template', 'project_clear', 'project_sync'],
+      'organizador': ['admin_panel', 'dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi', 'project_sync', 'project_import', 'project_template', 'adm_meta', 'adm_points', 'adm_pending'],
       'member': ['dashboard', 'ranking', 'loja', 'extrato', 'goals']
     };
     res.json({ role: roleName, permissions: defaults[roleName] || defaults['member'] });

@@ -9,7 +9,8 @@ const API_URL = `${BASE_API_URL}/api`;
 interface DistributionItem {
   id: string;
   name: string;
-  points: number;
+  points: number;   // Reward
+  penalty: number;  // Loss (as positive number or negative, I'll store as negative for clarity)
 }
 
 interface ChecklistGroup {
@@ -33,24 +34,24 @@ const PointDistributionPage: React.FC = () => {
         id: 'group1', 
         title: 'Termo de Aceite (Soluções)', 
         items: [
-          { id: '1-1', name: 'Documento Assinado', points: 50 },
-          { id: '1-2', name: 'Checklist de Verificação', points: 10 }
+          { id: '1-1', name: 'Documento Assinado', points: 50, penalty: -10 },
+          { id: '1-2', name: 'Checklist de Verificação', points: 10, penalty: -5 }
         ] 
       },
       { 
         id: 'group2', 
         title: 'Termo de Aceite (Treinamento)', 
         items: [
-          { id: '2-1', name: 'Presença Confirmada', points: 20 },
-          { id: '2-2', name: 'Material Entregue', points: 10 }
+          { id: '2-1', name: 'Presença Confirmada', points: 20, penalty: -5 },
+          { id: '2-2', name: 'Material Entregue', points: 10, penalty: -2 }
         ] 
       },
       { 
         id: 'group3', 
         title: 'Manual de Configuração', 
         items: [
-          { id: '3-1', name: 'Padrão LIGA Aplicado', points: 15 },
-          { id: '3-2', name: 'Registro de Alterações', points: 5 }
+          { id: '3-1', name: 'Padrão LIGA Aplicado', points: 15, penalty: -5 },
+          { id: '3-2', name: 'Registro de Alterações', points: 5, penalty: -2 }
         ] 
       }
     ];
@@ -60,7 +61,8 @@ const PointDistributionPage: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<Record<string, string>>({});
   const [selectedItems, setSelectedItems] = useState<Record<string, Set<string>>>({});
-  const [customPoints, setCustomPoints] = useState<Record<string, number>>({});
+  const [customPoints, setCustomPoints] = useState<Record<string, Record<string, number>>>({}); // itemId -> {points: 0, penalty: 0}
+  const [attachments, setAttachments] = useState<Record<string, File[]>>({});
   
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState<string | null>(null);
@@ -70,6 +72,7 @@ const PointDistributionPage: React.FC = () => {
   const [newGroupName, setNewGroupName] = useState('');
   const [newItemName, setNewItemName] = useState('');
   const [newItemPoints, setNewItemPoints] = useState(0);
+  const [newItemPenalty, setNewItemPenalty] = useState(0);
   const [showAddGroup, setShowAddGroup] = useState(false);
 
   useEffect(() => {
@@ -106,9 +109,12 @@ const PointDistributionPage: React.FC = () => {
     setSelectedItems(next);
   };
 
-  const handleScoreChange = (itemId: string, val: string) => {
+  const handleScoreChange = (itemId: string, type: 'points' | 'penalty', val: string) => {
     const score = parseInt(val) || 0;
-    setCustomPoints(prev => ({ ...prev, [itemId]: score }));
+    setCustomPoints(prev => ({ 
+      ...prev, 
+      [itemId]: { ...(prev[itemId] || {}), [type]: score } 
+    }));
   };
 
   const addGroup = (e: React.FormEvent) => {
@@ -126,15 +132,16 @@ const PointDistributionPage: React.FC = () => {
   };
 
   const addItemToGroup = (groupId: string) => {
-    if (!newItemName.trim()) return;
     const item: DistributionItem = {
       id: Math.random().toString(36).substr(2, 9),
       name: newItemName,
-      points: newItemPoints
+      points: newItemPoints,
+      penalty: newItemPenalty
     };
     setGroups(groups.map(g => g.id === groupId ? { ...g, items: [...g.items, item] } : g));
     setNewItemName('');
     setNewItemPoints(0);
+    setNewItemPenalty(0);
   };
 
   const removeGroup = (groupId: string) => {
@@ -167,33 +174,55 @@ const PointDistributionPage: React.FC = () => {
     setMsg({ text: '', type: '', groupId: '' });
 
     const group = groups.find(g => g.id === groupId);
-    const batchData = Array.from(itemsSelected).map(itemId => {
-      const item = group?.items.find(i => i.id === itemId);
-      return {
-        description: `[${group?.title}] ${item?.name}`,
-        points: customPoints[itemId] !== undefined ? customPoints[itemId] : item?.points,
-        type: 'manual'
-      };
+    if (!group) return;
+
+    // Calculate total points based on checked (gain) and unchecked (penalty)
+    let totalPoints = 0;
+    let details = `Checklist: ${group.title}\n`;
+    
+    group.items.forEach(item => {
+      const isChecked = itemsSelected.has(item.id);
+      const points = customPoints[item.id]?.points ?? item.points;
+      const penalty = customPoints[item.id]?.penalty ?? item.penalty;
+      
+      if (isChecked) {
+        totalPoints += points;
+        details += `✅ ${item.name}: +${points} pts\n`;
+      } else {
+        totalPoints += penalty;
+        details += `❌ ${item.name}: ${penalty} pts\n`;
+      }
+    });
+
+    const formData = new FormData();
+    formData.append('userId', userId);
+    formData.append('notes', details);
+    // Use a special "Manual Distribution" task type if available, otherwise we might need to handle it differently.
+    // For now, I'll send it as a "Custom" completion and the backend can handle points if taskTypeId is null.
+    formData.append('points', totalPoints.toString());
+    
+    const groupFiles = attachments[groupId] || [];
+    groupFiles.forEach(file => {
+      formData.append('files', file);
     });
 
     try {
-      const res = await fetch(`${API_URL}/admin/manual-points`, {
+      const res = await fetch(`${API_URL}/task-completions/manual`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ userId, entries: batchData })
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
       });
 
       if (res.ok) {
-        setMsg({ text: '✅ Pontos registrados com sucesso!', type: 'success', groupId });
+        setMsg({ text: '✅ Checklist enviado para aprovação!', type: 'success', groupId });
         const nextItems = { ...selectedItems };
         nextItems[groupId] = new Set();
         setSelectedItems(nextItems);
         setSelectedUserId({ ...selectedUserId, [groupId]: '' });
+        setAttachments({ ...attachments, [groupId]: [] });
       } else {
-        setMsg({ text: '❌ Erro no registro.', type: 'error', groupId });
+        const err = await res.json();
+        setMsg({ text: `❌ Erro: ${err.error || 'Erro no registro'}`, type: 'error', groupId });
       }
     } catch (err) {
       setMsg({ text: '❌ Falha na conexão.', type: 'error', groupId });
@@ -350,14 +379,27 @@ const PointDistributionPage: React.FC = () => {
                             <p style={{ fontWeight: isSelected ? '700' : '500', color: 'var(--text-main)' }}>{item.name}</p>
                           </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={e => e.stopPropagation()}>
-                            <input 
-                              type="number" 
-                              value={customPoints[item.id] !== undefined ? customPoints[item.id] : item.points}
-                              onChange={(e) => handleScoreChange(item.id, e.target.value)}
-                              style={{ width: '60px', padding: '0.4rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', background: 'var(--bg-hover)', color: 'var(--text-main)', textAlign: 'center', fontWeight: '700' }}
-                            />
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>pts</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.65rem', color: 'var(--accent)', fontWeight: 800 }}>GANHA</span>
+                              <input 
+                                type="number" 
+                                title="Pontos se Cumprido"
+                                value={customPoints[item.id]?.points !== undefined ? customPoints[item.id].points : item.points}
+                                onChange={(e) => handleScoreChange(item.id, 'points', e.target.value)}
+                                style={{ width: '55px', padding: '0.4rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', background: 'var(--bg-hover)', color: 'var(--text-main)', textAlign: 'center', fontWeight: '700' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.65rem', color: '#ef4444', fontWeight: 800 }}>PERDE</span>
+                              <input 
+                                type="number" 
+                                title="Pontos se NÃO Cumprido"
+                                value={customPoints[item.id]?.penalty !== undefined ? customPoints[item.id].penalty : item.penalty}
+                                onChange={(e) => handleScoreChange(item.id, 'penalty', e.target.value)}
+                                style={{ width: '55px', padding: '0.4rem', borderRadius: '0.5rem', border: '1px solid #ef444433', background: 'var(--bg-hover)', color: '#ef4444', textAlign: 'center', fontWeight: '700' }}
+                              />
+                            </div>
                             <button onClick={() => removeItem(activeGroup.id, item.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', marginLeft: '0.5rem' }}>
                                <Trash2 size={16} />
                             </button>
@@ -382,20 +424,53 @@ const PointDistributionPage: React.FC = () => {
                    onChange={(e) => setNewItemName(e.target.value)}
                    style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)' }}
                  />
-                 <input 
-                   type="number" 
-                   placeholder="Pts"
-                   value={newItemPoints || ''}
-                   onChange={(e) => setNewItemPoints(parseInt(e.target.value) || 0)}
-                   style={{ width: '70px', padding: '0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)' }}
-                 />
-                 <button 
-                   onClick={() => addItemToGroup(activeGroup.id)}
-                   className="btn-add-project" 
-                   style={{ padding: '0.6rem 1rem', borderRadius: '0.6rem', background: 'var(--bg-card)', color: 'var(--text-main)', boxShadow: 'none', border: '1px solid var(--border-color)' }}
-                 >
-                   <Plus size={16} /> Add Item
-                 </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontSize: '0.6rem', fontWeight: 800, textAlign: 'center' }}>GANHA</span>
+                    <input 
+                      type="number" 
+                      placeholder="Ganha"
+                      value={newItemPoints || ''}
+                      onChange={(e) => setNewItemPoints(parseInt(e.target.value) || 0)}
+                      style={{ width: '60px', padding: '0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontSize: '0.6rem', fontWeight: 800, textAlign: 'center', color: '#ef4444' }}>PERDE</span>
+                    <input 
+                      type="number" 
+                      placeholder="Perde"
+                      value={newItemPenalty || ''}
+                      onChange={(e) => setNewItemPenalty(parseInt(e.target.value) || 0)}
+                      style={{ width: '60px', padding: '0.6rem', borderRadius: '0.6rem', border: '1px solid #ef444433', background: 'var(--bg-card)', color: '#ef4444' }}
+                    />
+                  </div>
+                  <button 
+                    onClick={() => addItemToGroup(activeGroup.id)}
+                    className="btn-add-project" 
+                    style={{ padding: '0.6rem 1rem', borderRadius: '0.6rem', background: 'var(--accent)', color: 'white', border: 'none', marginTop: '14px' }}
+                  >
+                    <Plus size={16} /> Add
+                  </button>
+              </div>
+
+              {/* ANEXOS */}
+              <div style={{ padding: '1rem 1.5rem', background: 'rgba(59, 130, 246, 0.05)', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <CheckSquare size={20} color="#3b82f6" />
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Anexar PDF Comprobatório (Opcional)</label>
+                  <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600 }}>{attachments[activeGroup.id]?.length ? `${attachments[activeGroup.id].length} arquivo(s) selecionado(s)` : 'Nenhum arquivo selecionado'}</p>
+                  <input 
+                    type="file" 
+                    multiple 
+                    accept=".pdf" 
+                    onChange={e => {
+                      if (e.target.files) {
+                        setAttachments({ ...attachments, [activeGroup.id]: Array.from(e.target.files) });
+                      }
+                    }}
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                  />
+                </div>
               </div>
 
               {/* Registro Final */}

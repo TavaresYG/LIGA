@@ -237,7 +237,7 @@ const CronogramaForm: React.FC<CronogramaFormProps> = ({ initialData, onSave, on
             <h2>🏷️ 1. Premissas</h2>
             <div className="doc-grid">
               <div className="doc-cell"><label>Início do Projeto</label><span>{fmtDate(data.cron_inicio_projeto) || 'Não informado'}</span></div>
-              <div className="doc-cell"><label>Data de Virada Prevista</label><span>{fmtDate(data.cron_virada_prevista) || 'Não informado'}</span></div>
+              <div className="doc-cell"><label>Data de finalização</label><span>{fmtDate(data.cron_virada_prevista) || 'Não informado'}</span></div>
               <div className="doc-cell"><label>Duração Total</label><span>{data.cron_duracao_total || 'Não informado'}</span></div>
             </div>
           </div>
@@ -408,7 +408,7 @@ const CronogramaForm: React.FC<CronogramaFormProps> = ({ initialData, onSave, on
               <input id="f_cron_inicio_projeto" type="date" value={data.cron_inicio_projeto} onChange={handleChange} />
             </div>
             <div className="field">
-              <label>Data de Virada Prevista</label>
+              <label>Data de finalização</label>
               <input id="f_cron_virada_prevista" type="date" value={data.cron_virada_prevista} onChange={handleChange} />
             </div>
             <div className="field">

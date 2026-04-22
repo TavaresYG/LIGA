@@ -54,7 +54,7 @@ function AppContent() {
 
   const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     admin:      ['admin_panel', 'dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi'],
-    organizador:['admin_panel', 'dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'checklist', 'bi'],
+    organizador:['admin_panel', 'dashboard', 'form', 'kickoff', 'cronograma', 'ranking', 'loja', 'extrato', 'goals', 'projects', 'portfolios', 'checklist', 'distribuicao', 'bi'],
     member:     ['dashboard', 'ranking', 'loja', 'extrato', 'goals'],
   };
 

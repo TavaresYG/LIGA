@@ -14,7 +14,11 @@ import {
   ChevronRight,
   Building2,
   Clock,
-  Users
+  Users,
+  Paperclip,
+  Send,
+  X as XIcon,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import BASE_API_URL from '../api/config';
@@ -42,8 +46,13 @@ const ChecklistPage: React.FC = () => {
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [users, setUsers] = useState<UserTeam[]>([]);
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const [taskTypes, setTaskTypes] = useState<{ id: string; name: string; points: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSendingPoints, setIsSendingPoints] = useState(false);
+  
+  const [showPointsForm, setShowPointsForm] = useState(false);
+  const [pointsForm, setPointsForm] = useState({ userId: '', taskTypeId: '', notes: '', files: [] as File[] });
   
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -61,7 +70,16 @@ const ChecklistPage: React.FC = () => {
     fetchData();
     fetchUsers();
     fetchPortfolios();
+    fetchTaskTypes();
   }, [token]);
+
+  const fetchTaskTypes = async () => {
+    try {
+      const res = await fetch(`${API_URL}/task-types`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (Array.isArray(data)) setTaskTypes(data.filter(t => t.active));
+    } catch (err) {}
+  };
 
   const fetchData = async () => {
     try {
@@ -169,6 +187,48 @@ const ChecklistPage: React.FC = () => {
     }
   };
 
+  const submitPoints = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pointsForm.userId || !pointsForm.taskTypeId || !token) {
+      alert('Selecione o membro e a meta para pontuar.');
+      return;
+    }
+    
+    setIsSendingPoints(true);
+    const formData = new FormData();
+    formData.append('userId', pointsForm.userId);
+    formData.append('taskTypeId', pointsForm.taskTypeId);
+    formData.append('notes', pointsForm.notes);
+    
+    pointsForm.files.forEach(file => {
+      formData.append('files', file);
+    });
+
+    try {
+      const res = await fetch(`${API_URL}/task-completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      
+      const result = await res.json();
+      if (res.ok) {
+        alert('✅ Conclusão enviada para aprovação do Admin!');
+        setShowPointsForm(false);
+        setPointsForm({ userId: '', taskTypeId: '', notes: '', files: [] as File[] });
+      } else {
+        alert('❌ Erro: ' + (result.error || 'Erro desconhecido'));
+      }
+    } catch (err) {
+      alert('Falha ao conectar com o servidor');
+    } finally {
+      setIsSendingPoints(false);
+    }
+  };
+
+  const { permissions } = useAuth();
+  const canSendPoints = (permissions || []).includes('adm_points') || (permissions || []).includes('admin_panel');
+
   const removeItem = async (id: string) => {
     if (!window.confirm('Excluir esta tarefa?')) return;
     try {
@@ -254,6 +314,15 @@ const ChecklistPage: React.FC = () => {
             </div>
             <p style={{ fontSize: '0.85rem', fontWeight: '700', margin: 0 }}>{items.filter(i => i.completed).length}/{items.length} Concluídos</p>
           </div>
+
+          {canSendPoints && (
+            <button 
+              onClick={() => setShowPointsForm(true)}
+              style={{ padding: '0.75rem 1.25rem', borderRadius: '1rem', border: 'none', background: '#166534', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 12px rgba(22,101,52,0.2)' }}
+            >
+              <Award size={18} /> Registrar Pontuação
+            </button>
+          )}
         </div>
       </header>
 
@@ -424,6 +493,107 @@ const ChecklistPage: React.FC = () => {
         )}
 
       </div>
+
+      {/* MODAL DE PONTUAÇÃO */}
+      {showPointsForm && (
+        <div className="admin-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, position: 'fixed', inset: 0 }}>
+          <div className="admin-container" style={{ width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ padding: '2rem', background: 'var(--bg-card)', borderRadius: '1.5rem', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0 }}>Registrar Conclusão / Pontos</h2>
+                <button onClick={() => setShowPointsForm(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><XIcon size={24} /></button>
+              </div>
+              
+              <form onSubmit={submitPoints}>
+                <div className="admin-form" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <div className="afield">
+                    <label>Quem receberá esses pontos? <span className="req">*</span></label>
+                    <select 
+                      value={pointsForm.userId} 
+                      onChange={e => setPointsForm({...pointsForm, userId: e.target.value})}
+                      required
+                    >
+                      <option value="">-- Selecionar membro --</option>
+                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="afield">
+                    <label>Meta atingida? <span className="req">*</span></label>
+                    <select 
+                      value={pointsForm.taskTypeId} 
+                      onChange={e => setPointsForm({...pointsForm, taskTypeId: e.target.value})}
+                      required
+                    >
+                      <option value="">-- Selecionar meta --</option>
+                      {taskTypes.map(t => (
+                        <option key={t.id} value={t.id} style={{ color: t.points < 0 ? '#ef4444' : 'inherit' }}>
+                          {t.points < 0 ? '⚠️ [PENALIDADE] ' : ''}
+                          {t.name} ({t.points > 0 ? '+' : ''}{t.points} pts)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="afield">
+                    <label>Observações</label>
+                    <textarea 
+                      placeholder="Ex: Checklist do portfólio X finalizado..." 
+                      value={pointsForm.notes} 
+                      onChange={e => setPointsForm({...pointsForm, notes: e.target.value})}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="afield">
+                    <label>Anexar Documentos (PDF)</label>
+                    <div style={{ 
+                      border: '2px dashed var(--border-color)', 
+                      borderRadius: '1rem', 
+                      padding: '1rem', 
+                      textAlign: 'center',
+                      background: 'var(--bg-hover)',
+                      position: 'relative'
+                    }}>
+                      <Paperclip size={24} color="var(--text-muted)" style={{ marginBottom: '0.5rem' }} />
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>{pointsForm.files.length > 0 ? `${pointsForm.files.length} arquivo(s) selecionado(s)` : 'Clique para selecionar PDFs'}</p>
+                      <input 
+                        type="file" 
+                        multiple 
+                        accept=".pdf"
+                        onChange={e => {
+                          if (e.target.files) {
+                            setPointsForm({ ...pointsForm, files: Array.from(e.target.files) });
+                          }
+                        }}
+                        style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowPointsForm(false)} 
+                      style={{ flex: 1, padding: '0.85rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)', background: 'none', color: 'var(--text-main)', fontWeight: '700', cursor: 'pointer' }}
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      disabled={isSendingPoints}
+                      style={{ flex: 2, padding: '0.85rem', borderRadius: '0.75rem', border: 'none', background: 'var(--accent)', color: 'white', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                    >
+                      {isSendingPoints ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                      Enviar para Aprovação
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

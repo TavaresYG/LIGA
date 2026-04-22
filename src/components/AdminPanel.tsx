@@ -16,7 +16,7 @@ interface User { id: string; name: string; username: string; email?: string; rol
 interface TaskType { id: string; name: string; points: number; tipo: string; validation_rule_name?: string; }
 interface ValidationRule { id: string; name: string; }
 interface StoreCategory { id: string; name: string; }
-interface Pending { id: string; user_name: string; task_name: string; points_awarded: number; notes: string; created_at: string; }
+interface Pending { id: string; user_name: string; task_name: string; points_awarded: number; notes: string; attachments?: any; created_at: string; }
 interface Redemption { id: string; user_name: string; item_name: string; points_spent: number; status: string; created_at: string; }
 interface StoreItem { id: string; name: string; cost_points: number; stock: number; category_name: string; image_url?: string; }
 interface CustomRole { id: string; name: string; permissions: string[]; }
@@ -297,6 +297,9 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
   ];
   const visibleTabs = allTabs.filter(t => {
     if (role === 'admin') return true;
+    if (role === 'organizador') {
+        if (['meta', 'registry', 'pending'].includes(t.key)) return true;
+    }
     if (userPermissions.includes(t.perm)) return true;
     
     // Fallback for organizers
@@ -524,7 +527,7 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
             )}
 
             {/* METAS */}
-            {tab === 'meta' && role === 'admin' && (
+            {tab === 'meta' && (role === 'admin' || role === 'organizador') && (
               <div>
                 <h3 className="admin-section-title">Criar Nova Meta de Pontuação</h3>
                 <div className="admin-form">
@@ -549,7 +552,16 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
                 <h3 className="admin-section-title" style={{ marginTop: '2rem' }}>Metas Atuais</h3>
                 <table className="admin-table">
                   <thead><tr><th>Nome</th><th>Pontos</th><th>Tipo</th><th>Regra</th></tr></thead>
-                  <tbody>{taskTypes.map(t => <tr key={t.id}><td>{t.name}</td><td>{t.points} pts</td><td>{t.tipo}</td><td>{t.validation_rule_name || '—'}</td></tr>)}</tbody>
+                  <tbody>{taskTypes.map(t => (
+                    <tr key={t.id}>
+                      <td>{t.name}</td>
+                      <td style={{ color: t.points < 0 ? '#ef4444' : 'inherit', fontWeight: t.points < 0 ? '700' : 'normal' }}>
+                         {t.points} pts
+                      </td>
+                      <td>{t.tipo}</td>
+                      <td>{t.validation_rule_name || '—'}</td>
+                    </tr>
+                  ))}</tbody>
                 </table>
               </div>
             )}
@@ -569,7 +581,11 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
                   <div className="afield"><label>Meta Atingida</label>
                     <select value={compForm.taskTypeId} onChange={e => setCompForm(f => ({ ...f, taskTypeId: e.target.value }))}>
                       <option value="">-- Selecionar meta --</option>
-                      {taskTypes.map(t => <option key={t.id} value={t.id}>{t.name} ({t.points} pts)</option>)}
+                      {taskTypes.map(t => (
+                        <option key={t.id} value={t.id} style={{ color: t.points < 0 ? '#ef4444' : 'inherit' }}>
+                          {t.points < 0 ? '⚠️ [PENALIDADE] ' : ''}{t.name} ({t.points} pts)
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="afield"><label>Observação</label><input placeholder="Ex: Superou a meta em 10%..." value={compForm.notes} onChange={e => setCompForm(f => ({ ...f, notes: e.target.value }))} /></div>
@@ -579,20 +595,60 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
             )}
 
             {/* PENDENTES */}
-            {tab === 'pending' && role === 'admin' && (
+            {tab === 'pending' && (role === 'admin' || role === 'organizador') && (
               <div>
                 <h3 className="admin-section-title">Aprovação de Lançamentos</h3>
                 {pendingTasks.length === 0 ? <p style={{ color: 'var(--text-muted)' }}>Nenhum lançamento aguardando aprovação.</p> : (
                   <table className="admin-table">
-                    <thead><tr><th>Pessoa</th><th>Meta</th><th>Pontos</th><th>Data</th><th>Ação</th></tr></thead>
+                    <thead><tr><th>Pessoa</th><th>Meta</th><th>Documentos</th><th>Data</th><th>Ação</th></tr></thead>
                     <tbody>
                       {pendingTasks.map(p => (
                         <tr key={p.id}>
-                          <td>{p.user_name}</td><td>{p.task_name}</td><td>{p.points_awarded} pts</td>
+                          <td>
+                            <div style={{ fontWeight: 700 }}>{p.user_name}</div>
+                            {p.notes && <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontStyle: 'italic' }}>"{p.notes}"</div>}
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600 }}>{p.task_name}</div>
+                            <div style={{ color: p.points_awarded < 0 ? '#ef4444' : 'var(--accent)', fontSize: '11px', fontWeight: 800 }}>
+                              {p.points_awarded > 0 ? '+' : ''}{p.points_awarded} pts
+                            </div>
+                          </td>
+                          <td>
+                            {p.attachments && (() => {
+                              try {
+                                const files = typeof p.attachments === 'string' ? JSON.parse(p.attachments) : p.attachments;
+                                if (Array.isArray(files) && files.length > 0) {
+                                  return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                      {files.map((file: any, idx: number) => (
+                                        <a 
+                                          key={idx} 
+                                          href={`${BASE_API_URL}${file.path}`} 
+                                          target="_blank" 
+                                          rel="noreferrer"
+                                          style={{ fontSize: '10px', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                                        >
+                                          <Eye size={12} /> {file.name || 'Ver PDF'}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  );
+                                }
+                              } catch (e) {}
+                              return <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Sem anexo</span>;
+                            })()}
+                          </td>
                           <td>{new Date(p.created_at).toLocaleDateString('pt-BR')}</td>
                           <td>
-                            <button className="btn-approve" onClick={() => approveTask(p.id, 'approve')}>✓ Aprovar</button>
-                            <button className="btn-reject" onClick={() => approveTask(p.id, 'reject')}>✕ Rejeitar</button>
+                            {role === 'admin' ? (
+                              <>
+                                <button className="btn-approve" onClick={() => approveTask(p.id, 'approve')}>✓ Aprovar</button>
+                                <button className="btn-reject" onClick={() => approveTask(p.id, 'reject')}>✕ Rejeitar</button>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Aguardando Admin</span>
+                            )}
                           </td>
                         </tr>
                       ))}
