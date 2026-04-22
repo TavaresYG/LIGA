@@ -126,14 +126,22 @@ app.post('/api/auth/login', async (req, res) => {
   const { identifier, password } = req.body;
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1 OR username = $1', [identifier]);
-    if (result.rows.length === 0) return res.status(401).json({ error: 'Usuário não encontrado' });
+    if (result.rows.length === 0) {
+      console.log(`[LOGIN] Usuário não encontrado: ${identifier}`);
+      return res.status(401).json({ error: 'Usuário não encontrado' });
+    }
     const user = result.rows[0];
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
-    if (!passwordMatch) return res.status(401).json({ error: 'Senha incorreta' });
+    if (!passwordMatch) {
+      console.log(`[LOGIN] Senha incorreta para o usuário: ${identifier}`);
+      return res.status(401).json({ error: 'Senha incorreta' });
+    }
+    console.log(`[LOGIN] Sucesso: ${identifier}`);
     const token = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_SECRET);
     delete user.password_hash;
     res.json({ user, token });
   } catch (err) {
+    console.error(`[LOGIN ERROR] ${err.message}`);
     res.status(500).json({ error: 'Erro no servidor: ' + err.message });
   }
 });
@@ -252,7 +260,6 @@ app.delete('/api/documents/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Erro ao deletar documento' });
   }
 });
-
 // ===================== RANKING ROUTES =====================
 
 // GET /api/ranking?period=geral|semanal|mensal|custom&from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -1168,12 +1175,15 @@ app.post('/api/portfolios', authenticateToken, async (req, res) => {
       result = await pool.query('INSERT INTO clients (name, owner, description) VALUES ($1, $2, $3) RETURNING *', [name, owner, description]);
     }
     res.status(201).json(result.rows[0]);
+    res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao salvar portfólio: ' + err.message });
   }
 });
 
 // ===================== CHECKLISTS =====================
+
+// ===================== DOCUMENTS ROUTES =====================
 
 app.get('/api/checklists', authenticateToken, async (req, res) => {
   try {
