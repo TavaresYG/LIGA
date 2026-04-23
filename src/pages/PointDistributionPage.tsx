@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { CheckSquare, Send, Users, Plus, Trash2, Award, ClipboardList, CheckCircle2, Loader2, AlertCircle, ChevronRight, FileCheck } from 'lucide-react';
+import { CheckSquare, Send, Users, Plus, Trash2, Award, ClipboardList, CheckCircle2, Loader2, FileCheck } from 'lucide-react';
 import '../styles/goals.css';
 
 import BASE_API_URL from '../api/config';
@@ -10,7 +10,7 @@ interface DistributionItem {
   id: string;
   name: string;
   points: number;   // Reward
-  penalty: number;  // Loss (as positive number or negative, I'll store as negative for clarity)
+  penalty: number;  // Loss
 }
 
 interface ChecklistGroup {
@@ -37,22 +37,6 @@ const PointDistributionPage: React.FC = () => {
           { id: '1-1', name: 'Documento Assinado', points: 50, penalty: -10 },
           { id: '1-2', name: 'Checklist de Verificação', points: 10, penalty: -5 }
         ] 
-      },
-      { 
-        id: 'group2', 
-        title: 'Termo de Aceite (Treinamento)', 
-        items: [
-          { id: '2-1', name: 'Presença Confirmada', points: 20, penalty: -5 },
-          { id: '2-2', name: 'Material Entregue', points: 10, penalty: -2 }
-        ] 
-      },
-      { 
-        id: 'group3', 
-        title: 'Manual de Configuração', 
-        items: [
-          { id: '3-1', name: 'Padrão LIGA Aplicado', points: 15, penalty: -5 },
-          { id: '3-2', name: 'Registro de Alterações', points: 5, penalty: -2 }
-        ] 
       }
     ];
   });
@@ -60,15 +44,16 @@ const PointDistributionPage: React.FC = () => {
   const [activeGroupId, setActiveGroupId] = useState<string>(groups[0]?.id || '');
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<Record<string, string>>({});
+  const [manualNames, setManualNames] = useState<Record<string, string>>({});
   const [selectedItems, setSelectedItems] = useState<Record<string, Set<string>>>({});
-  const [customPoints, setCustomPoints] = useState<Record<string, Record<string, number>>>({}); // itemId -> {points: 0, penalty: 0}
+  const [customPoints, setCustomPoints] = useState<Record<string, Record<string, number>>>({}); 
   const [attachments, setAttachments] = useState<Record<string, File[]>>({});
+  const [searchTerm, setSearchTerm] = useState('');
   
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' | ''; groupId: string }>({ text: '', type: '', groupId: '' });
 
-  // New Group/Item states
   const [newGroupName, setNewGroupName] = useState('');
   const [newItemName, setNewItemName] = useState('');
   const [newItemPoints, setNewItemPoints] = useState(0);
@@ -102,10 +87,10 @@ const PointDistributionPage: React.FC = () => {
   const toggleItem = (groupId: string, itemId: string) => {
     const next = { ...selectedItems };
     if (!next[groupId]) next[groupId] = new Set();
-    
-    if (next[groupId].has(itemId)) next[groupId].delete(itemId);
-    else next[groupId].add(itemId);
-    
+    const newSet = new Set(next[groupId]);
+    if (newSet.has(itemId)) newSet.delete(itemId);
+    else newSet.add(itemId);
+    next[groupId] = newSet;
     setSelectedItems(next);
   };
 
@@ -132,6 +117,7 @@ const PointDistributionPage: React.FC = () => {
   };
 
   const addItemToGroup = (groupId: string) => {
+    if (!newItemName.trim()) return;
     const item: DistributionItem = {
       id: Math.random().toString(36).substr(2, 9),
       name: newItemName,
@@ -146,8 +132,9 @@ const PointDistributionPage: React.FC = () => {
 
   const removeGroup = (groupId: string) => {
     if (window.confirm('Excluir todo este checklist?')) {
-      setGroups(groups.filter(g => g.id !== groupId));
-      if (activeGroupId === groupId) setActiveGroupId(groups[0]?.id || '');
+      const nextGroups = groups.filter(g => g.id !== groupId);
+      setGroups(nextGroups);
+      if (activeGroupId === groupId) setActiveGroupId(nextGroups[0]?.id || '');
     }
   };
 
@@ -176,14 +163,15 @@ const PointDistributionPage: React.FC = () => {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
-    // Calculate total points based on checked (gain) and unchecked (penalty)
+    const manualName = manualNames[groupId] || 'Não especificado';
+
     let totalPoints = 0;
-    let details = `Checklist: ${group.title}\n`;
+    let details = `Checklist: ${group.title}\nManual: ${manualName}\n\n`;
     
     group.items.forEach(item => {
       const isChecked = itemsSelected.has(item.id);
-      const points = customPoints[item.id]?.points ?? item.points;
-      const penalty = customPoints[item.id]?.penalty ?? item.penalty;
+      const points = Number(customPoints[item.id]?.points ?? item.points ?? 0);
+      const penalty = Number(customPoints[item.id]?.penalty ?? item.penalty ?? 0);
       
       if (isChecked) {
         totalPoints += points;
@@ -194,17 +182,15 @@ const PointDistributionPage: React.FC = () => {
       }
     });
 
+    if (isNaN(totalPoints)) totalPoints = 0;
+
     const formData = new FormData();
     formData.append('userId', userId);
     formData.append('notes', details);
-    // Use a special "Manual Distribution" task type if available, otherwise we might need to handle it differently.
-    // For now, I'll send it as a "Custom" completion and the backend can handle points if taskTypeId is null.
     formData.append('points', totalPoints.toString());
     
     const groupFiles = attachments[groupId] || [];
-    groupFiles.forEach(file => {
-      formData.append('files', file);
-    });
+    groupFiles.forEach(file => { formData.append('files', file); });
 
     try {
       const res = await fetch(`${API_URL}/task-completions/manual`, {
@@ -219,6 +205,7 @@ const PointDistributionPage: React.FC = () => {
         nextItems[groupId] = new Set();
         setSelectedItems(nextItems);
         setSelectedUserId({ ...selectedUserId, [groupId]: '' });
+        setManualNames({ ...manualNames, [groupId]: '' });
         setAttachments({ ...attachments, [groupId]: [] });
       } else {
         const err = await res.json();
@@ -233,267 +220,223 @@ const PointDistributionPage: React.FC = () => {
   };
 
   const activeGroup = groups.find(g => g.id === activeGroupId);
+  const filteredItems = activeGroup?.items.filter(i => 
+    i.name.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
   if (loading) return <div style={{ padding: '2rem' }}>Carregando seletor de equipe...</div>;
 
   return (
     <div className="goals-page fade-in" style={{ padding: '2rem' }}>
-      <header className="goals-header" style={{ marginBottom: '2rem' }}>
+      <header className="goals-header" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h1 className="goals-page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Award size={32} color="var(--accent)" />
-            Distribuição de Pontos LIGA
+          <h1 className="goals-page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.75rem' }}>
+            <Award size={28} color="var(--accent)" />
+            Distribuição de Pontos
           </h1>
-          <p className="goals-subtitle">Gerencie múltiplos checklists de entrega e distribua pontos para o time.</p>
+          <p className="goals-subtitle">Selecione os critérios cumpridos para gerar a pontuação do time.</p>
         </div>
         
         <button 
           onClick={() => setShowAddGroup(!showAddGroup)}
           className="btn-add-project"
-          style={{ padding: '0.75rem 1.5rem', borderRadius: '1rem', background: 'var(--accent)', color: 'white', border: 'none' }}
+          style={{ padding: '0.6rem 1.25rem', borderRadius: '0.75rem', background: 'var(--accent)', color: 'white', border: 'none', fontSize: '0.9rem' }}
         >
           <Plus size={18} /> Novo Checklist
         </button>
       </header>
 
       {showAddGroup && (
-        <form onSubmit={addGroup} className="fade-in" style={{ background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '1.25rem', border: '1px solid var(--accent)', marginBottom: '2rem', display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+        <form onSubmit={addGroup} className="fade-in" style={{ background: 'var(--bg-card)', padding: '1.25rem', borderRadius: '1rem', border: '1px solid var(--accent)', marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Nome do Novo Checklist</label>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>Nome do Novo Checklist</label>
             <input 
               type="text" 
               autoFocus
               placeholder="Ex: Checklist de Treinamento"
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '0.75rem', background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
+              style={{ width: '100%', padding: '0.6rem', borderRadius: '0.6rem', background: 'var(--bg-hover)', border: '1px solid var(--border-color)', color: 'var(--text-main)' }}
             />
           </div>
-          <button type="submit" className="btn-add-project" style={{ height: '45px', background: 'var(--accent)', color: 'white', border: 'none' }}>
-            Criar Grupo
+          <button type="submit" className="btn-add-project" style={{ height: '40px', background: 'var(--accent)', color: 'white', border: 'none' }}>
+            Criar
           </button>
         </form>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '2rem' }}>
-        {/* Menu Lateral de Checklists */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.5rem', letterSpacing: '1px' }}>Checklists Ativos</h4>
+      <div style={{ display: 'flex', gap: '1.5rem' }}>
+        <nav style={{ width: '220px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <h4 style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.4rem', letterSpacing: '0.5px' }}>Checklists</h4>
           {groups.map(g => (
             <button
               key={g.id}
-              onClick={() => setActiveGroupId(g.id)}
+              onClick={() => { setActiveGroupId(g.id); setSearchTerm(''); }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '1rem',
-                borderRadius: '0.75rem',
+                padding: '0.75rem',
+                borderRadius: '0.6rem',
                 border: 'none',
                 background: activeGroupId === g.id ? 'var(--accent)' : 'var(--bg-card)',
                 color: activeGroupId === g.id ? 'white' : 'var(--text-main)',
                 fontWeight: activeGroupId === g.id ? '700' : '500',
                 cursor: 'pointer',
                 textAlign: 'left',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                fontSize: '0.85rem'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                 <ClipboardList size={18} />
-                 <span style={{ fontSize: '0.9rem' }}>{g.title}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
+                 <ClipboardList size={16} style={{ flexShrink: 0 }} />
+                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.title}</span>
               </div>
-              {activeGroupId === g.id && <ChevronRight size={16} />}
             </button>
           ))}
         </nav>
 
-        {/* Área Principal do Checklist Selecionado */}
-        <main>
+        <main style={{ flex: 1 }}>
           {activeGroup ? (
-            <div className="fade-in" style={{ background: 'var(--bg-card)', borderRadius: '1.5rem', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
-              <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-hover)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <FileCheck size={24} color="var(--accent)" />
-                  <h2 style={{ fontSize: '1.3rem', fontWeight: '800' }}>{activeGroup.title}</h2>
+            <div className="fade-in" style={{ background: 'var(--bg-card)', borderRadius: '1rem', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              
+              <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-hover)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FileCheck size={20} color="var(--accent)" />
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: '800' }}>{activeGroup.title}</h2>
                 </div>
-                <button 
-                  onClick={() => removeGroup(activeGroup.id)}
-                  style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600' }}
-                >
-                  <Trash2 size={14} style={{ display: 'inline', marginRight: '4px' }} /> Excluir Checklist
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ position: 'relative' }}>
+                    <input 
+                      type="text"
+                      placeholder="Buscar item..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      style={{ padding: '0.4rem 0.75rem', borderRadius: '2rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.8rem', width: '150px' }}
+                    />
+                  </div>
+                  <button onClick={() => removeGroup(activeGroup.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '600' }}>
+                    <Trash2 size={12} /> Excluir
+                  </button>
+                </div>
               </div>
 
-              {/* Seletor de Membro INTEGRADO */}
-              <div style={{ padding: '1.5rem', background: 'rgba(255,193,7,0.03)', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <Users size={20} color="var(--accent)" />
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Quem receberá esses pontos?</label>
+              <div style={{ padding: '0.75rem 1.25rem', background: 'rgba(255,193,7,0.02)', borderBottom: '1px solid var(--border-color)', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1.5', minWidth: '200px' }}>
+                  <Users size={18} color="var(--text-muted)" />
                   <select 
                     value={selectedUserId[activeGroup.id] || ''} 
                     onChange={(e) => setSelectedUserId({ ...selectedUserId, [activeGroup.id]: e.target.value })}
-                    style={{ width: '100%', maxWidth: '400px', padding: '0.6rem', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '0.6rem', color: 'var(--text-main)', fontWeight: '600' }}
+                    style={{ flex: 1, padding: '0.5rem', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', color: 'var(--text-main)', fontSize: '0.85rem', fontWeight: '600' }}
                   >
-                    <option value="">-- Selecionar Membro da Equipe --</option>
+                    <option value="">-- Selecionar Usuário --</option>
                     {allUsers.map(u => (
-                      <option key={u.id} value={u.id}>{u.name} (@{u.username})</option>
+                      <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
                 </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '2', minWidth: '250px' }}>
+                  <Plus size={18} color="var(--text-muted)" />
+                  <input 
+                    type="text"
+                    placeholder="Nome do Manual/Projeto..."
+                    value={manualNames[activeGroup.id] || ''}
+                    onChange={(e) => setManualNames({ ...manualNames, [activeGroup.id]: e.target.value })}
+                    style={{ flex: 1, padding: '0.5rem 0.75rem', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', color: 'var(--text-main)', fontSize: '0.85rem' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', background: 'rgba(59,130,246,0.1)', color: '#3b82f6', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}>
+                    <CheckSquare size={14} />
+                    {attachments[activeGroup.id]?.length ? `${attachments[activeGroup.id].length} PDF(s)` : 'Anexar PDF'}
+                    <input 
+                      type="file" multiple accept=".pdf" 
+                      onChange={e => { if (e.target.files) setAttachments({ ...attachments, [activeGroup.id]: Array.from(e.target.files) }); }}
+                      style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* Lista de Itens */}
-              <div style={{ padding: '0.5rem' }}>
-                {activeGroup.items.length > 0 ? (
-                  activeGroup.items.map(item => {
+              <div style={{ padding: '0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0.5rem', maxHeight: 'calc(100vh - 400px)', overflowY: 'auto' }}>
+                {filteredItems.length > 0 ? (
+                  filteredItems.map(item => {
                     const isSelected = selectedItems[activeGroup.id]?.has(item.id);
                     return (
                       <div 
                         key={item.id} 
-                        style={{ 
-                          padding: '1rem 1.25rem',
-                          margin: '0.5rem',
-                          borderRadius: '1rem',
-                          background: isSelected ? 'rgba(255,193,7,0.08)' : 'var(--bg-card)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '1rem',
-                          border: `1px solid ${isSelected ? 'var(--accent)' : 'transparent'}`,
-                          cursor: 'pointer'
-                        }}
+                        style={{ padding: '0.6rem 0.8rem', borderRadius: '0.6rem', background: isSelected ? 'rgba(255,193,7,0.08)' : 'var(--bg-hover)', display: 'flex', alignItems: 'center', gap: '0.75rem', border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border-color)'}`, cursor: 'pointer', transition: 'all 0.15s ease' }}
                         onClick={() => toggleItem(activeGroup.id, item.id)}
                       >
-                         <div style={{ 
-                            width: '26px', 
-                            height: '26px', 
-                            borderRadius: '50%', 
-                            border: `2px solid ${isSelected ? 'var(--accent)' : 'var(--border-color)'}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: isSelected ? 'var(--accent)' : 'transparent',
-                            color: 'white'
-                          }}>
-                            {isSelected && <CheckCircle2 size={16} />}
-                          </div>
-                          
-                          <div style={{ flex: 1 }}>
-                            <p style={{ fontWeight: isSelected ? '700' : '500', color: 'var(--text-main)' }}>{item.name}</p>
-                          </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }} onClick={e => e.stopPropagation()}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                              <span style={{ fontSize: '0.65rem', color: 'var(--accent)', fontWeight: 800 }}>GANHA</span>
-                              <input 
-                                type="number" 
-                                title="Pontos se Cumprido"
-                                value={customPoints[item.id]?.points !== undefined ? customPoints[item.id].points : item.points}
-                                onChange={(e) => handleScoreChange(item.id, 'points', e.target.value)}
-                                style={{ width: '55px', padding: '0.4rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', background: 'var(--bg-hover)', color: 'var(--text-main)', textAlign: 'center', fontWeight: '700' }}
-                              />
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                              <span style={{ fontSize: '0.65rem', color: '#ef4444', fontWeight: 800 }}>PERDE</span>
-                              <input 
-                                type="number" 
-                                title="Pontos se NÃO Cumprido"
-                                value={customPoints[item.id]?.penalty !== undefined ? customPoints[item.id].penalty : item.penalty}
-                                onChange={(e) => handleScoreChange(item.id, 'penalty', e.target.value)}
-                                style={{ width: '55px', padding: '0.4rem', borderRadius: '0.5rem', border: '1px solid #ef444433', background: 'var(--bg-hover)', color: '#ef4444', textAlign: 'center', fontWeight: '700' }}
-                              />
-                            </div>
-                            <button onClick={() => removeItem(activeGroup.id, item.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', marginLeft: '0.5rem' }}>
-                               <Trash2 size={16} />
-                            </button>
-                          </div>
+                        <div style={{ width: '20px', height: '20px', borderRadius: '4px', border: `2px solid ${isSelected ? 'var(--accent)' : 'var(--text-muted)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isSelected ? 'var(--accent)' : 'transparent', color: 'white', flexShrink: 0 }}>
+                          {isSelected && <CheckCircle2 size={14} />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: '0.85rem', fontWeight: isSelected ? '700' : '500', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.name}>{item.name}</p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }} onClick={e => e.stopPropagation()}>
+                          <input 
+                            type="number" 
+                            value={customPoints[item.id]?.points !== undefined ? customPoints[item.id].points : item.points}
+                            onChange={(e) => handleScoreChange(item.id, 'points', e.target.value)}
+                            style={{ width: '42px', padding: '0.25rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--accent)', textAlign: 'center', fontSize: '0.75rem', fontWeight: '800' }}
+                          />
+                          <input 
+                            type="number" 
+                            value={customPoints[item.id]?.penalty !== undefined ? customPoints[item.id].penalty : item.penalty}
+                            onChange={(e) => handleScoreChange(item.id, 'penalty', e.target.value)}
+                            style={{ width: '42px', padding: '0.25rem', borderRadius: '4px', border: '1px solid #ef444433', background: 'var(--bg-card)', color: '#ef4444', textAlign: 'center', fontSize: '0.75rem', fontWeight: '800' }}
+                          />
+                          <button onClick={() => removeItem(activeGroup.id, item.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', opacity: 0.5 }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     );
                   })
                 ) : (
-                  <div style={{ padding: '4rem 2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <ClipboardList size={40} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-                    <p>Adicione itens a este checklist abaixo.</p>
+                  <div style={{ gridColumn: '1/-1', padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <p>{searchTerm ? 'Nenhum item encontrado.' : 'Este checklist está vazio.'}</p>
                   </div>
                 )}
               </div>
 
-              {/* Adicionar Novo Item ao grupo ativo */}
-              <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '0.75rem', alignItems: 'center', background: 'var(--bg-hover)' }}>
-                 <input 
-                   type="text" 
-                   placeholder="Nome do novo item..." 
-                   value={newItemName}
-                   onChange={(e) => setNewItemName(e.target.value)}
-                   style={{ flex: 1, padding: '0.6rem 1rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)' }}
-                 />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '0.6rem', fontWeight: 800, textAlign: 'center' }}>GANHA</span>
-                    <input 
-                      type="number" 
-                      placeholder="Ganha"
-                      value={newItemPoints || ''}
-                      onChange={(e) => setNewItemPoints(parseInt(e.target.value) || 0)}
-                      style={{ width: '60px', padding: '0.6rem', borderRadius: '0.6rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)' }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '0.6rem', fontWeight: 800, textAlign: 'center', color: '#ef4444' }}>PERDE</span>
-                    <input 
-                      type="number" 
-                      placeholder="Perde"
-                      value={newItemPenalty || ''}
-                      onChange={(e) => setNewItemPenalty(parseInt(e.target.value) || 0)}
-                      style={{ width: '60px', padding: '0.6rem', borderRadius: '0.6rem', border: '1px solid #ef444433', background: 'var(--bg-card)', color: '#ef4444' }}
-                    />
+              <div style={{ borderTop: '1px solid var(--border-color)', background: 'var(--bg-hover)' }}>
+                <div style={{ padding: '0.75rem 1.25rem', display: 'flex', gap: '0.6rem', alignItems: 'center', borderBottom: '1px solid var(--border-color)' }}>
+                  <input 
+                    type="text" placeholder="Novo item..." value={newItemName}
+                    onChange={(e) => setNewItemName(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && addItemToGroup(activeGroup.id)}
+                    style={{ flex: 1, padding: '0.4rem 0.75rem', borderRadius: '0.4rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.8rem' }}
+                  />
+                  <input type="number" placeholder="+ pts" value={newItemPoints || ''} onChange={(e) => setNewItemPoints(parseInt(e.target.value) || 0)} style={{ width: '50px', padding: '0.4rem', borderRadius: '0.4rem', border: '1px solid var(--border-color)', background: 'var(--bg-card)', textAlign: 'center', fontSize: '0.8rem' }} />
+                  <input type="number" placeholder="- pts" value={newItemPenalty || ''} onChange={(e) => setNewItemPenalty(parseInt(e.target.value) || 0)} style={{ width: '50px', padding: '0.4rem', borderRadius: '0.4rem', border: '1px solid #ef444433', background: 'var(--bg-card)', color: '#ef4444', textAlign: 'center', fontSize: '0.8rem' }} />
+                  <button onClick={() => addItemToGroup(activeGroup.id)} style={{ padding: '0.4rem 0.75rem', borderRadius: '0.4rem', background: 'var(--accent)', color: 'white', border: 'none' }}><Plus size={16} /></button>
+                </div>
+
+                <div style={{ padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.85rem' }}>
+                    {msg.groupId === activeGroup.id && msg.text && (
+                      <span style={{ color: msg.type === 'success' ? '#16a34a' : '#ef4444', fontWeight: '700' }}>{msg.text}</span>
+                    )}
                   </div>
                   <button 
-                    onClick={() => addItemToGroup(activeGroup.id)}
-                    className="btn-add-project" 
-                    style={{ padding: '0.6rem 1rem', borderRadius: '0.6rem', background: 'var(--accent)', color: 'white', border: 'none', marginTop: '14px' }}
-                  >
-                    <Plus size={16} /> Add
-                  </button>
-              </div>
-
-              {/* ANEXOS */}
-              <div style={{ padding: '1rem 1.5rem', background: 'rgba(59, 130, 246, 0.05)', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <CheckSquare size={20} color="#3b82f6" />
-                <div style={{ flex: 1, position: 'relative' }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Anexar PDF Comprobatório (Opcional)</label>
-                  <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600 }}>{attachments[activeGroup.id]?.length ? `${attachments[activeGroup.id].length} arquivo(s) selecionado(s)` : 'Nenhum arquivo selecionado'}</p>
-                  <input 
-                    type="file" 
-                    multiple 
-                    accept=".pdf" 
-                    onChange={e => {
-                      if (e.target.files) {
-                        setAttachments({ ...attachments, [activeGroup.id]: Array.from(e.target.files) });
-                      }
-                    }}
-                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                  />
-                </div>
-              </div>
-
-              {/* Registro Final */}
-              <div style={{ padding: '1.5rem', borderTop: '2px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)' }}>
-                 {msg.groupId === activeGroup.id && msg.text && (
-                   <div style={{ color: msg.type === 'success' ? 'var(--accent)' : 'var(--danger)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <AlertCircle size={18} /> {msg.text}
-                   </div>
-                 )}
-                 <div style={{ flex: 1 }}></div>
-                 <button 
                     disabled={!!registering}
                     onClick={() => handleRegister(activeGroup.id)}
                     className="btn-add-project"
-                    style={{ padding: '1rem 3rem', borderRadius: '1.5rem', background: 'var(--accent)', color: 'white', border: 'none', fontWeight: '800', fontSize: '1.1rem', boxShadow: '0 8px 15px rgba(255,193,7,0.3)' }}
-                 >
-                   {registering === activeGroup.id ? <Loader2 className="animate-spin" /> : <><Send size={20} /> Registrar Pontuação</>}
-                 </button>
+                    style={{ padding: '0.75rem 2rem', borderRadius: '0.75rem', background: 'var(--accent)', color: 'white', border: 'none', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.6rem' }}
+                  >
+                    {registering === activeGroup.id ? <Loader2 className="animate-spin" size={18} /> : <><Send size={18} /> Registrar Tudo</>}
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
-            <div style={{ padding: '5rem', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: '1.5rem', border: '1px dashed var(--border-color)' }}>
-              Selecione ou crie um checklist para começar.
+            <div style={{ padding: '5rem', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: '1rem', border: '1px dashed var(--border-color)' }}>
+              <CheckSquare size={48} style={{ marginBottom: '1.5rem', opacity: 0.2 }} />
+              <p>Selecione um checklist na lateral para começar.</p>
             </div>
           )}
         </main>

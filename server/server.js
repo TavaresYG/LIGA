@@ -66,7 +66,9 @@ const requireAdmin = async (req, res, next) => {
     }
     next();
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao verificar permissão de admin' });
+    fs.appendFileSync(path.join(__dirname, 'error.log'), `[${new Date().toISOString()}] [ADMIN CHECK ERROR]: ${err.stack}\n`);
+    console.error('❌ [ADMIN CHECK ERROR]:', err);
+    res.status(500).json({ error: 'Erro ao verificar permissão de admin: ' + err.message });
   }
 };
 
@@ -132,7 +134,7 @@ app.post('/api/auth/signup', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { identifier, password } = req.body;
   try {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1 OR username = $1', [identifier]);
+    const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(username) = LOWER($1)', [identifier]);
     if (result.rows.length === 0) {
       console.log(`[LOGIN] Usuário não encontrado: ${identifier}`);
       return res.status(401).json({ error: 'Usuário não encontrado' });
@@ -167,13 +169,21 @@ app.get('/api/me/role', authenticateToken, async (req, res) => {
 app.get('/api/users', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT u.id, u.name, u.username, u.email, COALESCE(ur.role, 'member') as role 
+      SELECT 
+        u.id, u.name, u.username, u.email, 
+        COALESCE(ur.role, 'member') as role,
+        (
+          COALESCE((SELECT SUM(points_awarded) FROM task_completions tc WHERE tc.user_id = u.id AND tc.status = 'approved'), 0) +
+          COALESCE((SELECT SUM(points) FROM bonuses b WHERE b.user_id = u.id), 0) -
+          COALESCE((SELECT SUM(points_spent) FROM redemptions r WHERE r.user_id = u.id AND r.status != 'cancelled'), 0)
+        ) as total_points
       FROM users u 
       LEFT JOIN user_roles ur ON u.id = ur.user_id 
       ORDER BY u.name
     `);
     res.json(result.rows);
   } catch (err) {
+    console.error('Error fetching users:', err);
     res.status(500).json({ error: 'Erro ao buscar usuários' });
   }
 });
@@ -215,6 +225,47 @@ app.put('/api/users/:id/role', authenticateToken, requireAdmin, async (req, res)
     res.json({ message: 'Permissão atualizada' });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao atualizar permissão' });
+  }
+});
+
+// Reset all points for a user (Admin only)
+app.delete('/api/admin/users/:id/points', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Delete completions, bonuses and redemptions (or cancel them)
+    await client.query('DELETE FROM task_completions WHERE user_id = $1::uuid', [id]);
+    await client.query('DELETE FROM bonuses WHERE user_id = $1::uuid', [id]);
+    await client.query('DELETE FROM redemptions WHERE user_id = $1::uuid', [id]);
+    
+    await client.query('COMMIT');
+    res.json({ message: 'Pontuação resetada com sucesso (histórico limpo).' });
+  } catch (err) {
+    fs.appendFileSync(path.join(__dirname, 'error.log'), `[${new Date().toISOString()}] [RESET ERROR]: ${err.stack}\n`);
+    console.error('❌ [RESET POINTS ERROR]:', err);
+    try { await client.query('ROLLBACK'); } catch(e) {}
+    res.status(500).json({ error: 'Erro ao resetar pontos: ' + err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Adjust points (Admin only) — shortcut to create a bonus or penalty
+app.post('/api/admin/users/:id/points/adjust', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { points, reason } = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO bonuses (user_id, points, reason, awarded_by) VALUES ($1::uuid, $2, $3, $4::uuid) RETURNING *',
+      [id, points, reason || 'Ajuste administrativo', req.user.id]
+    );
+    res.json({ message: 'Pontuação ajustada com sucesso', adjustment: result.rows[0] });
+  } catch (err) {
+    fs.appendFileSync(path.join(__dirname, 'error.log'), `[${new Date().toISOString()}] [ADJUST ERROR]: ${err.stack}\n`);
+    console.error('❌ [ADJUST POINTS ERROR]:', err);
+    res.status(500).json({ error: 'Erro ao ajustar pontos: ' + err.message });
   }
 });
 
@@ -464,7 +515,7 @@ app.post('/api/task-completions/manual', authenticateToken, requireOrganizadorOr
 
   try {
     const result = await pool.query(
-      'INSERT INTO task_completions (user_id, task_type_id, points_awarded, status, notes, attachments) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      'INSERT INTO task_completions (user_id, task_type_id, points_awarded, status, notes, attachments) VALUES ($1::uuid, $2, $3, $4, $5, $6) RETURNING *',
       [userId, null, parseInt(points) || 0, 'pending', notes || null, JSON.stringify(files)]
     );
     res.status(201).json(result.rows[0]);
@@ -902,97 +953,7 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
   }
 });
 
-// ===================== POINTS STATEMENT =====================
-
-// GET /api/me/statement — unified point history for the logged-in user
-app.get('/api/me/statement', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    // Approved task completions (earn points)
-    const tasks = await pool.query(`
-      SELECT
-        tc.id,
-        'task' AS type,
-        tt.name AS description,
-        tc.points_awarded AS points,
-        tc.approved_at AS date,
-        tc.notes,
-        tc.status
-      FROM task_completions tc
-      LEFT JOIN task_types tt ON tt.id = tc.task_type_id
-      WHERE tc.user_id = $1 AND (tc.status = 'approved' OR tc.status = 'pending')
-    `, [userId]);
-
-    // Bonuses (earn points)
-    const bonuses = await pool.query(`
-      SELECT
-        b.id,
-        'bonus' AS type,
-        COALESCE('Bônus: ' || b.reason, 'Bônus de Equipe') AS description,
-        b.points AS points,
-        b.created_at AS date,
-        b.reason AS notes,
-        'approved' AS status
-      FROM bonuses b
-      WHERE b.user_id = $1
-    `, [userId]);
-
-    // Redemptions (spend points)
-    const redemptions = await pool.query(`
-      SELECT
-        r.id,
-        'redemption' AS type,
-        'Resgate: ' || r.item_name AS description,
-        -r.points_spent AS points,
-        r.created_at AS date,
-        r.status AS notes,
-        r.status
-      FROM redemptions r
-      WHERE r.user_id = $1 AND r.status != 'cancelled'
-    `, [userId]);
-
-    // Merge and sort by date descending
-    const all = [
-      ...tasks.rows,
-      ...bonuses.rows,
-      ...redemptions.rows,
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    res.json(all);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar extrato: ' + err.message });
-  }
-});
-
-// GET /api/users/:id/statement — extrato de outro usuário (apenas admin/organizador)
-app.get('/api/users/:id/statement', authenticateToken, requireOrganizadorOrAdmin, async (req, res) => {
-  try {
-    const userId = req.params.id;
-
-    const tasks = await pool.query(`
-      SELECT tc.id, 'task' AS type, tt.name AS description,
-        tc.points_awarded AS points, tc.approved_at AS date, tc.notes, tc.status
-      FROM task_completions tc
-      LEFT JOIN task_types tt ON tt.id = tc.task_type_id
-      WHERE tc.user_id = $1 AND (tc.status = 'approved' OR tc.status = 'pending')
-    `, [userId]);
-
-    const bonuses = await pool.query(`
-      SELECT b.id, 'bonus' AS type,
-        COALESCE('Bônus: ' || b.reason, 'Bônus de Equipe') AS description,
-        b.points, b.created_at AS date, b.reason AS notes, 'approved' AS status
-      FROM bonuses b WHERE b.user_id = $1
-    `, [userId]);
-
-    const all = [...tasks.rows, ...bonuses.rows]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    res.json(all);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar extrato: ' + err.message });
-  }
-});
+// ===================== CLIENTS =====================
 
 // ===================== PROJECTS =====================
 

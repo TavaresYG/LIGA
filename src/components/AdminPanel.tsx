@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   Target, Edit3, Clock, Store, Star, Package, Gift, X,
   ChevronRight, Settings, LayoutDashboard, Users, Link,
-  CheckCircle2, XCircle, Loader2, ShieldCheck, Eye, Lock, Trash2
+  CheckCircle2, XCircle, Loader2, ShieldCheck, Eye, Lock, Trash2, RotateCcw, PlusSquare
 } from 'lucide-react';
 import '../styles/admin.css';
 
@@ -12,7 +12,7 @@ const API_URL = `${BASE_API_URL}/api`;
 
 type AdminTab = 'meta' | 'registry' | 'pending' | 'store' | 'bonuses' | 'redemptions' | 'prize' | 'users' | 'roles' | 'integrations';
 
-interface User { id: string; name: string; username: string; email?: string; role?: string; }
+interface User { id: string; name: string; username: string; email?: string; role?: string; total_points?: number; }
 interface TaskType { id: string; name: string; points: number; tipo: string; validation_rule_name?: string; }
 interface ValidationRule { id: string; name: string; }
 interface StoreCategory { id: string; name: string; }
@@ -94,6 +94,13 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
   };
   const showMsg = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 4000); };
 
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(`${API_URL}/users`, { headers: h() });
+      if (res.ok) setUsers(await res.json());
+    } catch (_) {}
+  };
+
   const fetchCustomRoles = async () => {
     try {
       const res = await fetch(`${API_URL}/admin/roles`, { headers: h() });
@@ -143,6 +150,52 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
     if (next.has(viewId)) next.delete(viewId); else next.add(viewId);
     setRoleForm({ ...roleForm, permissions: next });
   };
+  const resetUserPoints = async (userId: string, userName: string) => {
+    if (!window.confirm(`ATENÇÃO: Deseja apagar TODO o histórico de pontos e resgates de ${userName}? Esta ação não pode ser desfeita.`)) return;
+    
+    try {
+      const res = await fetch(`${API_URL}/admin/users/${userId}/points`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert('Histórico de pontos limpo!');
+        fetchUsers();
+      } else {
+        const err = await res.json();
+        alert(`Erro: ${err.error}`);
+      }
+    } catch (err) {
+      alert('Falha na conexão.');
+    }
+  };
+
+  const adjustPoints = async (userId: string, userName: string) => {
+    const val = window.prompt(`Ajustar pontos para ${userName}:\n(Use números positivos para somar e negativos para subtrair)`);
+    if (val === null) return;
+    const points = parseInt(val);
+    if (isNaN(points)) return alert('Valor inválido.');
+
+    const reason = window.prompt('Motivo do ajuste (Opcional):') || 'Ajuste Manual';
+
+    try {
+      const res = await fetch(`${API_URL}/admin/users/${userId}/points/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ points, reason })
+      });
+      if (res.ok) {
+        alert('Pontuação ajustada!');
+        fetchUsers();
+      } else {
+        const err = await res.json();
+        alert(`Erro: ${err.error}`);
+      }
+    } catch (err) {
+      alert('Falha na conexão.');
+    }
+  };
+
   const submitRole = async () => {
     if (!roleForm.name.trim()) { showMsg('❌ Nome do perfil é obrigatório'); return; }
     setIsSavingRole(true);
@@ -195,7 +248,11 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
   // ---- Approve/Reject ----
   const approveTask = async (id: string, action: 'approve' | 'reject') => {
     const { ok } = await api(`/task-completions/${id}/${action}`, { method: 'PUT', headers: h() });
-    if (ok) { showMsg(`✅ Tarefa ${action === 'approve' ? 'aprovada' : 'rejeitada'}!`); setPendingTasks(prev => prev.filter(p => p.id !== id)); }
+    if (ok) { 
+      showMsg(`✅ Tarefa ${action === 'approve' ? 'aprovada' : 'rejeitada'}!`); 
+      setPendingTasks(prev => prev.filter(p => p.id !== id));
+      if (action === 'approve') fetchUsers(); // Refresh points!
+    }
   };
 
   // ---- Store ----
@@ -214,8 +271,13 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
   const [bonusForm, setBonusForm] = useState({ userId: '', points: '', reason: '' });
   const submitBonus = async () => {
     const { ok } = await api('/bonuses', { method: 'POST', headers: h(), body: JSON.stringify({ userId: bonusForm.userId, points: Number(bonusForm.points), reason: bonusForm.reason }) });
-    ok ? showMsg('✅ Bônus concedido!') : showMsg('❌ Erro ao conceder bônus');
-    if (ok) setBonusForm({ userId: '', points: '', reason: '' });
+    if (ok) {
+       showMsg('✅ Bônus concedido!');
+       setBonusForm({ userId: '', points: '', reason: '' });
+       fetchUsers(); // Refresh points!
+    } else {
+       showMsg('❌ Erro ao conceder bônus');
+    }
   };
 
   // ---- Prize ----
@@ -501,13 +563,14 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
 
                 <h3 className="admin-section-title" style={{ marginTop: '2rem' }}>Usuários Cadastrados / Permissões</h3>
                 <table className="admin-table">
-                  <thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Permissão</th></tr></thead>
+                  <thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Pontos</th><th>Permissão</th><th>Ações</th></tr></thead>
                   <tbody>
                     {users.map(u => (
                       <tr key={u.id}>
                         <td style={{ fontWeight: 600 }}>{u.name}</td>
                         <td>@{u.username}</td>
                         <td style={{ color: 'var(--text-muted)' }}>{u.email || '—'}</td>
+                        <td style={{ fontWeight: 800, color: 'var(--accent)' }}>{u.total_points || 0} <span style={{ fontSize: '0.7rem' }}>pts</span></td>
                         <td>
                           <select value={u.role || 'member'} onChange={(e) => updateUserRole(u.id, e.target.value)}
                             style={{ padding: '6px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '0.85rem', cursor: 'pointer' }}>
@@ -518,6 +581,16 @@ const AdminPanel: React.FC<{ role: string; permissions: string[]; onClose: () =>
                               <option key={cr.id} value={cr.name}>{cr.name}</option>
                             ))}
                           </select>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.75rem' }}>
+                            <button onClick={() => adjustPoints(u.id, u.name)} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer', padding: '4px' }} title="Ajustar Pontos (Crédito/Débito)">
+                              <PlusSquare size={18} />
+                            </button>
+                            <button onClick={() => resetUserPoints(u.id, u.name)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }} title="LIMPAR HISTÓRICO (Zerar)">
+                              <RotateCcw size={18} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
