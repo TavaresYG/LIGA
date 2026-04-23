@@ -5,9 +5,11 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 // Desabilita verificação de certificado TLS globalmente (necessário para Supabase na Hostinger)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
+const dbUrl = process.env.DATABASE_URL || '';
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false }
+  connectionString: dbUrl,
+  ssl: dbUrl.includes('localhost') || dbUrl.length === 0 ? false : { rejectUnauthorized: false }
 });
 
 const initDb = async () => {
