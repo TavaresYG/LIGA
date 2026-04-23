@@ -2,8 +2,12 @@ const { Pool } = require('pg');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+// Desabilita verificação de certificado TLS globalmente (necessário para Supabase na Hostinger)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
 const initDb = async () => {
@@ -233,6 +237,27 @@ const initDb = async () => {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255) NOT NULL UNIQUE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 14. Custom Roles — funções customizadas de acesso
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS custom_roles (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name VARCHAR(255) NOT NULL UNIQUE,
+        description TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 15. Role Permissions — permissões por função customizada
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS role_permissions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        role_id UUID REFERENCES custom_roles(id) ON DELETE CASCADE,
+        view_name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(role_id, view_name)
       );
     `);
 
